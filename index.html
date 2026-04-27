@@ -264,15 +264,10 @@
 
 <header>
   <div class="header-icon">
-    <!-- Beer mug pictogram SVG -->
     <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Mug body -->
       <rect x="4" y="10" width="19" height="20" rx="2" fill="none" stroke="#FF8709" stroke-width="2.2"/>
-      <!-- Handle -->
       <path d="M23 14 Q31 14 31 20 Q31 26 23 26" fill="none" stroke="#FF8709" stroke-width="2.2" stroke-linecap="round"/>
-      <!-- Foam top -->
       <path d="M4 10 Q6.5 6 9 10 Q11.5 6 14 10 Q16.5 6 19 10 Q21.5 6 23 10" fill="none" stroke="#FF8709" stroke-width="2" stroke-linecap="round"/>
-      <!-- Beer fill line -->
       <line x1="7" y1="19" x2="20" y2="19" stroke="#FF870930" stroke-width="1.5" stroke-linecap="round"/>
     </svg>
   </div>
@@ -293,16 +288,20 @@
 </header>
 
 <main>
-  <div id="readonlyBanner" style="display:none;" class="readonly-banner">
+  <!-- 接続状態バナー -->
+  <div id="connectingBanner" class="readonly-banner" style="display:none;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-    <span>このページは<strong>閲覧専用</strong>です。新しいイベントを作成するには <a href="?" style="color:var(--amber);font-weight:700;">こちら</a></span>
+    <span>接続中...</span>
+  </div>
+  <div id="newEventBanner" class="readonly-banner" style="display:none;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>新しいイベントを作成するには <a href="?" style="color:var(--amber);font-weight:700;">こちら</a></span>
   </div>
 
   <div class="event-title-wrap">
     <input type="text" id="eventTitleInput" class="event-title-input"
       placeholder="イベント名を入力（例: 5/1 BBQ大会）"
-      oninput="eventTitle=this.value">
-    <div id="eventTitleDisplay" class="event-title-display" style="display:none;"></div>
+      oninput="onTitleInput(this.value)">
   </div>
 
   <div class="sec-title">参加者</div>
@@ -345,9 +344,120 @@
   </div>
 </main>
 
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyDXgZG_yzDAoci40bEqOhh-kEoc7honNCU",
+  authDomain:        "billsplitter-df48f.firebaseapp.com",
+  databaseURL:       "https://billsplitter-df48f-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "billsplitter-df48f",
+  storageBucket:     "billsplitter-df48f.firebasestorage.app",
+  messagingSenderId: "55897555733",
+  appId:             "1:55897555733:web:cf8d83683f8e58760d5f1c"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+// ── ルームID ──────────────────────────────────────────────────────────
+function getRoomId() {
+  const params = new URLSearchParams(location.search);
+  return params.get('room');
+}
+
+function genRoomId() {
+  return Math.random().toString(36).slice(2,8).toUpperCase();
+}
+
+// ── 保存（デバウンス付き） ────────────────────────────────────────────
+let saveTimer = null;
+function scheduleSave() {
+  if (!currentRoomId) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveToFirebase(), 600);
+}
+
+async function saveToFirebase() {
+  if (!currentRoomId) return;
+  const data = {
+    title:     eventTitle,
+    members:   members.map(m => ({ n: m.name, a: m.animalIdx })),
+    bills:     bills.map(b => ({
+      id:  b.id, desc: b.desc, amt: b.amount,
+      pay: b.payer, div: b.dividers, ovr: b.overrides
+    })),
+    billId,
+    animalIdx,
+    ts: Date.now()
+  };
+  await set(ref(db, 'rooms/' + currentRoomId), data);
+}
+
+// ── Firebaseからロード & リアルタイム購読 ──────────────────────────
+let isRemoteUpdate = false;
+
+function subscribeRoom(roomId) {
+  document.getElementById('connectingBanner').style.display = 'flex';
+  onValue(ref(db, 'rooms/' + roomId), (snapshot) => {
+    document.getElementById('connectingBanner').style.display = 'none';
+    document.getElementById('newEventBanner').style.display   = 'flex';
+    const data = snapshot.val();
+    if (!data) return;
+
+    isRemoteUpdate = true;
+    eventTitle  = data.title    || '';
+    members     = (data.members || []).map(m => ({ name: m.n, animalIdx: m.a }));
+    billId      = data.billId   || 0;
+    animalIdx   = data.animalIdx || members.length;
+    bills       = (data.bills   || []).map(b => ({
+      id: b.id, desc: b.desc || '', amount: b.amt || 0,
+      payer: b.pay || '', dividers: b.div || [], overrides: b.ovr || {}
+    }));
+
+    // タイトル反映
+    const titleInp = document.getElementById('eventTitleInput');
+    if (titleInp) titleInp.value = eventTitle;
+
+    // UI再描画
+    renderMembers();
+    document.getElementById('billsContainer').innerHTML = '';
+    bills.forEach(b => {
+      const wrap = document.createElement('div');
+      wrap.className = 'bill-row'; wrap.id = 'bill-' + b.id;
+      document.getElementById('billsContainer').appendChild(wrap);
+      refreshBillUI(b.id);
+    });
+    updateGrandTotal();
+    isRemoteUpdate = false;
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+window.__firebaseSave = scheduleSave;
+
+window.addEventListener('DOMContentLoaded', async () => {
+  const roomId = getRoomId();
+  if (roomId) {
+    currentRoomId = roomId;
+    subscribeRoom(roomId);
+  }
+  // else: 新規 — 空白スタート、最初のaddMember/addBillでルーム作成
+  document.getElementById('memberInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addMember();
+  });
+});
+
+// グローバルに公開
+window.__db    = db;
+window.__ref   = ref;
+window.__set   = set;
+window.__dbSet = (path, data) => set(ref(db, path), data);
+</script>
+
 <script>
-// ── Animal icons (SVG pictograms, 20×20 viewBox) ───────────────────────
-// 20 animals, enough for large groups
 const ANIMALS = [
   // 0 cat
   { name:'cat', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -550,121 +660,64 @@ function getAnimalSvg(idx, size=20, color='currentColor') {
 }
 
 // ── State ──────────────────────────────────────────────────────────────
-let members    = [];  // { name, animalIdx }
-let bills      = [];
-let billId     = 0;
-let readOnly   = false;
-let animalIdx  = 0;
-let eventTitle = '';
+let members      = [];
+let bills        = [];
+let billId       = 0;
+let animalIdx    = 0;
+let eventTitle   = '';
+let currentRoomId = null;
+let lastTransfers = [];
 
-// ── URL share / load ───────────────────────────────────────────────────
-function encodeState() {
-  const state = {
-    members: members.map(m => ({ n: m.name, a: m.animalIdx })),
-    bills: bills.map(b => ({
-      id:   b.id,
-      desc: b.desc,
-      amt:  b.amount,
-      pay:  b.payer,
-      div:  b.dividers,
-      ovr:  b.overrides,
-    })),
-    billId,
-    animalIdx,
-    title: eventTitle,
-  };
-  return btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+// ── 保存トリガー ──────────────────────────────────────────────────────
+function save() {
+  if (window.__firebaseSave) window.__firebaseSave();
 }
 
-function decodeState(hash) {
-  try {
-    const state = JSON.parse(decodeURIComponent(escape(atob(hash))));
-    members    = (state.members||[]).map(m => ({ name: m.n, animalIdx: m.a }));
-    billId     = state.billId || 0;
-    animalIdx  = state.animalIdx || members.length;
-    eventTitle = state.title || '';
-    bills = (state.bills||[]).map(b => ({
-      id:        b.id,
-      desc:      b.desc || '',
-      amount:    b.amt  || 0,
-      payer:     b.pay  || '',
-      dividers:  b.div  || [],
-      overrides: b.ovr  || {},
-    }));
-    return true;
-  } catch(e) { return false; }
+// ── ルーム作成（初回データ入力時） ────────────────────────────────────
+async function ensureRoom() {
+  if (currentRoomId) return;
+  currentRoomId = genRoomId();
+  // URLをroomパラメータ付きに更新（リロードなし）
+  const url = new URL(location.href);
+  url.searchParams.set('room', currentRoomId);
+  history.replaceState(null, '', url.toString());
+  document.getElementById('newEventBanner').style.display = 'flex';
 }
 
+function genRoomId() {
+  return Math.random().toString(36).slice(2,8).toUpperCase();
+}
+
+// ── URLシェア ─────────────────────────────────────────────────────────
 function shareUrl() {
-  const code = encodeState();
-  const url  = `${location.origin}${location.pathname}#${code}`;
-
+  const url = location.href;
   function showCopied() {
     const el = document.getElementById('shareCopied');
     el.classList.add('show');
     setTimeout(() => el.classList.remove('show'), 2500);
   }
-
-  // navigator.clipboard は HTTPS or localhost のみ動作する
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(showCopied).catch(() => fallback(url));
+    navigator.clipboard.writeText(url).then(showCopied).catch(() => fallbackCopy(url, showCopied));
   } else {
-    fallback(url);
+    fallbackCopy(url, showCopied);
   }
 }
 
-function fallback(url) {
-  // execCommand fallback（file:// や HTTP でも動く）
+function fallbackCopy(url, cb) {
   const ta = document.createElement('textarea');
-  ta.value = url;
-  ta.style.cssText = 'position:fixed;top:-999px;left:-999px;opacity:0';
-  document.body.appendChild(ta);
-  ta.focus(); ta.select();
+  ta.value = url; ta.style.cssText = 'position:fixed;top:-999px;opacity:0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
   const ok = document.execCommand('copy');
   document.body.removeChild(ta);
-  if (ok) {
-    const el = document.getElementById('shareCopied');
-    el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), 2500);
-  } else {
-    // 最終手段: promptダイアログでURLを表示してユーザーが手動コピー
-    prompt('このURLをコピーしてシェアしてください:', url);
-  }
+  if (ok) cb(); else prompt('URLをコピーしてシェアしてください:', url);
 }
 
-// ── Init ───────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  const hash = location.hash.slice(1);
-  if (hash && decodeState(hash)) {
-    readOnly = true;
-    document.getElementById('readonlyBanner').style.display = 'flex';
-    document.getElementById('addMemberRow').style.display   = 'none';
-    document.getElementById('addBillBtn').style.display     = 'none';
-    document.getElementById('calcBtn').style.display        = 'none';
-    document.getElementById('shareBtn').style.display       = 'none';
-    // show event title as display text, hide input
-    if (eventTitle) {
-      const inp = document.getElementById('eventTitleInput');
-      const dsp = document.getElementById('eventTitleDisplay');
-      if (inp) inp.style.display = 'none';
-      if (dsp) { dsp.textContent = eventTitle; dsp.style.display = ''; }
-    } else {
-      const wrap = document.querySelector('.event-title-wrap');
-      if (wrap) wrap.style.display = 'none';
-    }
-    renderMembers();
-    bills.forEach(b => {
-      const wrap = document.createElement('div');
-      wrap.className = 'bill-row'; wrap.id = `bill-${b.id}`;
-      document.getElementById('billsContainer').appendChild(wrap);
-      refreshBillUI(b.id);
-    });
-    updateGrandTotal();
-    // Auto-calculate on view
-    calculate();
-  }
-  // else: blank slate, no default names
-});
+// ── イベントタイトル ──────────────────────────────────────────────────
+function onTitleInput(val) {
+  eventTitle = val;
+  ensureRoom();
+  save();
+}
 
 // ── Members ────────────────────────────────────────────────────────────
 function addMember() {
@@ -676,10 +729,9 @@ function addMember() {
   renderMembers();
   bills.forEach(b => { if (!b.dividers.includes(name)) b.dividers.push(name); refreshBillUI(b.id); });
   updatePayerSelects();
+  ensureRoom();
+  save();
 }
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('memberInput').addEventListener('keydown', e => { if (e.key === 'Enter') addMember(); });
-});
 
 function removeMember(name) {
   members = members.filter(m => m.name !== name);
@@ -691,9 +743,10 @@ function removeMember(name) {
   });
   renderMembers();
   updatePayerSelects();
+  save();
 }
 
-function getMember(name) { return members.find(m => m.name === name); }
+function getMember(name)   { return members.find(m => m.name === name); }
 function memberAnimal(name) { const m = getMember(name); return m ? m.animalIdx : 0; }
 
 function renderMembers() {
@@ -705,7 +758,7 @@ function renderMembers() {
     chip.innerHTML =
       `<span class="chip-animal">${getAnimalSvg(m.animalIdx, 22, 'var(--amber)')}</span>` +
       esc(m.name) +
-      (readOnly ? '' : ` <button class="chip-del" onclick="removeMember('${ea(m.name)}')">×</button>`);
+      ` <button class="chip-del" onclick="removeMember('${ea(m.name)}')">×</button>`;
     c.appendChild(chip);
   });
 }
@@ -719,6 +772,8 @@ function addBill() {
   document.getElementById('billsContainer').appendChild(wrap);
   refreshBillUI(b.id);
   updateGrandTotal();
+  ensureRoom();
+  save();
 }
 
 function getBill(id) { return bills.find(b => b.id === id); }
@@ -728,17 +783,14 @@ function refreshBillUI(id) {
   const div = document.getElementById(`bill-${id}`);
   if (!div) return;
   const idx = bills.indexOf(b) + 1;
-  const ro  = readOnly;
 
   const divBtns = members.map(m => {
     const active = b.dividers.includes(m.name);
     return `<button type="button" class="divider-btn${active?' is-active':''}"
-      ${ro ? 'disabled style="cursor:default;opacity:0.85;"' : `onclick="toggleDivider(${id},'${ea(m.name)}')"`}
-    >
-      <span class="d-animal">${getAnimalSvg(m.animalIdx, 18, active ? '#fff' : 'var(--muted)')}</span>
-      <span class="chk-icon">${active?'✓':''}</span>
-      ${esc(m.name)}
-    </button>`;
+      onclick="toggleDivider(${id},'${ea(m.name)}')"
+    ><span class="d-animal">${getAnimalSvg(m.animalIdx, 18, active ? '#fff' : 'var(--muted)')}</span>
+    <span class="chk-icon">${active?'✓':''}</span>
+    ${esc(m.name)}</button>`;
   }).join('');
 
   div.innerHTML = `
@@ -746,11 +798,10 @@ function refreshBillUI(id) {
     <div class="spacer"></div>
     <div class="bill-row-header">
       <input type="text" placeholder="品目・店名" value="${esc(b.desc)}"
-        ${ro ? 'readonly style="background:var(--paper);color:var(--muted);cursor:default;"' : `oninput="getBill(${id}).desc=this.value"`}
-        style="width:100%">
+        oninput="getBill(${id}).desc=this.value; save()" style="width:100%">
       <div class="payer-wrap">
         <div class="payer-label">支払った人</div>
-        <select class="payer-select" ${ro ? 'disabled' : `onchange="getBill(${id}).payer=this.value"`}>
+        <select class="payer-select" onchange="getBill(${id}).payer=this.value; save()">
           <option value="">-- 選択 --</option>
           ${members.map(m=>`<option value="${esc(m.name)}"${b.payer===m.name?' selected':''}>${esc(m.name)}</option>`).join('')}
         </select>
@@ -760,28 +811,23 @@ function refreshBillUI(id) {
         <div style="display:flex;align-items:center;gap:4px;">
           <span class="yen-sym">¥</span>
           <input type="number" class="amount-input" min="0" placeholder="0"
-            value="${b.amount||''}"
-            ${ro ? 'readonly style="background:var(--paper);cursor:default;"' : `onchange="onAmountChange(${id},this.value)"`}>
+            value="${b.amount||''}" onchange="onAmountChange(${id},this.value)">
         </div>
       </div>
     </div>
-
     <div class="sub-label">対象メンバー</div>
-    ${ro ? '' : `<div class="all-check-row">
+    <div class="all-check-row">
       <button class="btn btn-outline btn-xs" onclick="setAllDividers(${id},true)">全員</button>
       <button class="btn btn-outline btn-xs" onclick="setAllDividers(${id},false)">クリア</button>
-    </div>`}
+    </div>
     <div class="dividers-grid" id="dividers-${id}">${divBtns}</div>
-
     <hr class="section-hr">
-    <div class="sub-label">割り振り金額${ro?'':' （手動修正可）'}</div>
+    <div class="sub-label">割り振り金額（手動修正可）</div>
     <div id="split-table-${id}"></div>
-    ${ro ? '' : '<div class="recalc-note">※ 金額を変更してEnterまたはタブキーで確定 → 差額が自動再配分されます</div>'}
-
-    ${ro ? '' : `<div style="margin-top:12px;text-align:right;">
+    <div class="recalc-note">※ 金額を変更してEnterまたはタブキーで確定 → 差額が自動再配分されます</div>
+    <div style="margin-top:12px;text-align:right;">
       <button class="btn btn-red" onclick="removeBill(${id})">この会計を削除</button>
-    </div>`}
-  `;
+    </div>`;
 
   renderSplitTable(id);
 }
@@ -794,6 +840,7 @@ function removeBill(id) {
     if (n) n.textContent = `会計 ${i+1}`;
   });
   updateGrandTotal();
+  save();
 }
 
 function updateGrandTotal() {
@@ -807,6 +854,7 @@ function onAmountChange(id, val) {
   b.overrides = {};
   renderSplitTable(id);
   updateGrandTotal();
+  save();
 }
 
 function toggleDivider(id, name) {
@@ -814,24 +862,21 @@ function toggleDivider(id, name) {
   const wasActive = b.dividers.includes(name);
   if (wasActive) { b.dividers = b.dividers.filter(d => d !== name); delete b.overrides[name]; }
   else           { b.dividers.push(name); }
-
   const grid = document.getElementById(`dividers-${id}`);
   if (grid) {
-    grid.querySelectorAll('.divider-btn').forEach(btn => {
-      const animal = btn.querySelector('.d-animal');
-      const chk    = btn.querySelector('.chk-icon');
-      // find matching member by iterating members in order
-      const idx    = [...grid.querySelectorAll('.divider-btn')].indexOf(btn);
-      if (idx < 0 || idx >= members.length) return;
-      const m = members[idx];
+    grid.querySelectorAll('.divider-btn').forEach((btn,i) => {
+      if (i >= members.length) return;
+      const m = members[i];
       if (m.name !== name) return;
       const nowActive = !wasActive;
       btn.classList.toggle('is-active', nowActive);
-      chk.textContent = nowActive ? '✓' : '';
-      if (animal) animal.innerHTML = getAnimalSvg(m.animalIdx, 18, nowActive ? '#fff' : 'var(--muted)');
+      btn.querySelector('.chk-icon').textContent = nowActive ? '✓' : '';
+      const a = btn.querySelector('.d-animal');
+      if (a) a.innerHTML = getAnimalSvg(m.animalIdx, 18, nowActive ? '#fff' : 'var(--muted)');
     });
   }
   renderSplitTable(id);
+  save();
 }
 
 function setAllDividers(id, val) {
@@ -839,15 +884,15 @@ function setAllDividers(id, val) {
   b.dividers  = val ? members.map(m=>m.name) : [];
   b.overrides = {};
   refreshBillUI(id);
+  save();
 }
 
 function updatePayerSelects() {
   bills.forEach(b => {
     const sel = document.getElementById(`bill-${b.id}`)?.querySelector('.payer-select');
     if (!sel) return;
-    const cur = b.payer;
     sel.innerHTML = `<option value="">-- 選択 --</option>` +
-      members.map(m=>`<option value="${esc(m.name)}"${cur===m.name?' selected':''}>${esc(m.name)}</option>`).join('');
+      members.map(m=>`<option value="${esc(m.name)}"${b.payer===m.name?' selected':''}>${esc(m.name)}</option>`).join('');
   });
 }
 
@@ -875,14 +920,12 @@ function renderSplitTable(id) {
   const splits   = computeSplits(b);
   const splitSum = Object.values(splits).reduce((s,v)=>s+v,0);
   const diff     = Math.abs(splitSum - b.amount);
-  const ro       = readOnly;
-
   cont.innerHTML = `
     <table class="split-table">
       <thead><tr>
-        <th style="width:40%">メンバー</th>
+        <th style="width:38%">メンバー</th>
         <th style="text-align:right">割り勘額</th>
-        <th style="width:28px"></th>
+        <th style="width:30px"></th>
       </tr></thead>
       <tbody>
         ${b.dividers.map((d,i) => {
@@ -890,23 +933,18 @@ function renderSplitTable(id) {
           const ai    = memberAnimal(d);
           return `<tr>
             <td><div class="member-cell">
-              <span class="tbl-animal">${getAnimalSvg(ai, 18, 'var(--muted)')}</span>
+              <span class="tbl-animal">${getAnimalSvg(ai,18,'var(--muted)')}</span>
               ${esc(d)}
             </div></td>
-            <td>
-              <div class="split-amount-cell">
-                <span class="yen-sym">¥</span>
-                ${ro
-                  ? `<span style="font-weight:700;font-size:14px;">${(splits[d]??0).toLocaleString()}</span>`
-                  : `<input type="number" class="split-input${isOvr?' modified':''}"
-                      value="${splits[d]??0}"
-                      onfocus="this.select()"
-                      onkeydown="if(event.key==='Enter')this.blur()"
-                      onchange="onSplitChange(${id},'${ea(d)}',this)">`
-                }
-              </div>
-            </td>
-            <td>${ro ? '' : `<button class="reset-btn${isOvr?' visible':''}" title="均等に戻す" onclick="resetOverride(${id},'${ea(d)}')">↺</button>`}</td>
+            <td><div class="split-amount-cell">
+              <span class="yen-sym">¥</span>
+              <input type="number" class="split-input${isOvr?' modified':''}"
+                value="${splits[d]??0}"
+                onfocus="this.select()"
+                onkeydown="if(event.key==='Enter')this.blur()"
+                onchange="onSplitChange(${id},'${ea(d)}',this)">
+            </div></td>
+            <td><button class="reset-btn${isOvr?' visible':''}" title="均等に戻す" onclick="resetOverride(${id},'${ea(d)}')">↺</button></td>
           </tr>`;
         }).join('')}
         <tr id="split-total-${id}" style="background:var(--amber-pale)">
@@ -927,12 +965,10 @@ function onSplitChange(id, name, inputEl) {
   inputEl.classList.add('modified');
   const resetBtn = inputEl.closest('tr')?.querySelector('.reset-btn');
   if (resetBtn) resetBtn.classList.add('visible');
-
   const splits = computeSplits(b);
   const cont   = document.getElementById(`split-table-${id}`);
   if (!cont) return;
-  const allInputs = cont.querySelectorAll('tbody .split-input');
-  allInputs.forEach((inp, i) => {
+  cont.querySelectorAll('tbody .split-input').forEach((inp, i) => {
     const member = b.dividers[i];
     if (!member || member === name) return;
     if (b.overrides[member] !== undefined) return;
@@ -945,11 +981,13 @@ function onSplitChange(id, name, inputEl) {
     totalRow.cells[1].innerHTML = `¥${splitSum.toLocaleString()}` +
       (diff>1?`<span style="color:var(--red);font-size:11px;margin-left:4px;">（差額 ¥${Math.round(diff)}）</span>`:'');
   }
+  save();
 }
 
 function resetOverride(id, name) {
   delete getBill(id).overrides[name];
   renderSplitTable(id);
+  save();
 }
 
 // ── Calculate ──────────────────────────────────────────────────────────
@@ -968,7 +1006,7 @@ function calculate() {
   renderTransfers(minimizeTransfers(balance));
   const sec = document.getElementById('summarySection');
   sec.style.display = '';
-  if (!readOnly) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function minimizeTransfers(balance) {
@@ -1010,9 +1048,6 @@ function renderSummary(paid, owed, balance) {
   });
 }
 
-// stores last computed transfers for sharing
-let lastTransfers = [];
-
 function renderTransfers(transfers) {
   lastTransfers = transfers;
   const list=document.getElementById('transferList');
@@ -1028,19 +1063,16 @@ function renderTransfers(transfers) {
     item.className='transfer-item'; item.style.animationDelay=`${i*0.06}s`;
     const fa=memberAnimal(t.from), ta=memberAnimal(t.to);
     item.innerHTML=`
-      <span class="transfer-from">
-        <span class="t-animal">${getAnimalSvg(fa,16,'#fff')}</span>${esc(t.from)}
-      </span>
+      <span class="transfer-from"><span class="t-animal">${getAnimalSvg(fa,16,'#fff')}</span>${esc(t.from)}</span>
       <span class="transfer-arrow">→</span>
-      <span class="transfer-to">
-        <span class="t-animal">${getAnimalSvg(ta,16,'#fff')}</span>${esc(t.to)}
-      </span>
+      <span class="transfer-to"><span class="t-animal">${getAnimalSvg(ta,16,'#fff')}</span>${esc(t.to)}</span>
       <span class="transfer-amount">¥${t.amount.toLocaleString()}</span>`;
     list.appendChild(item);
   });
   if(wrap) wrap.style.display='';
 }
 
+// ── Share result text ──────────────────────────────────────────────────
 function buildShareText() {
   const total    = bills.reduce((s,b)=>s+b.amount,0);
   const titleStr = eventTitle ? '「' + eventTitle + '」' : '';
@@ -1060,48 +1092,34 @@ function buildShareText() {
 
 function shareResult() {
   const text = buildShareText();
-  const url  = location.href;
-
-  // Web Share API: triggers native share sheet on mobile (LINE, Messages, etc.)
   if (navigator.share) {
-    navigator.share({ title: '割り勘精算', text, url })
-      .catch(() => {}); // user cancelled — no error needed
+    navigator.share({ title: '割り勘精算', text, url: location.href }).catch(() => {});
     return;
   }
-
-  // Fallback: clipboard copy
   function showCopied() {
     const el = document.getElementById('resultCopied');
     el.classList.add('show');
     setTimeout(() => el.classList.remove('show'), 2500);
   }
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(showCopied).catch(() => resultFallback(text));
+    navigator.clipboard.writeText(text).then(showCopied).catch(() => resultFallback(text, showCopied));
   } else {
-    resultFallback(text);
+    resultFallback(text, showCopied);
   }
 }
 
-function resultFallback(text) {
+function resultFallback(text, cb) {
   const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.cssText = 'position:fixed;top:-999px;left:-999px;opacity:0';
-  document.body.appendChild(ta);
-  ta.focus(); ta.select();
-  const ok = document.execCommand('copy');
+  ta.value = text; ta.style.cssText = 'position:fixed;top:-999px;opacity:0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  if (document.execCommand('copy')) cb();
+  else prompt('精算結果をコピーしてシェアしてください:', text);
   document.body.removeChild(ta);
-  if (ok) {
-    const el = document.getElementById('resultCopied');
-    el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), 2500);
-  } else {
-    prompt('精算結果をコピーしてシェアしてください:', text);
-  }
 }
 
 // ── Utils ──────────────────────────────────────────────────────────────
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function ea(s)  { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function esc(s)  { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function ea(s)   { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 </script>
 </body>
 </html>
