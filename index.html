@@ -1394,7 +1394,6 @@ function buildShareText() {
   const total = bills.reduce((s,b) => s+toJPY(b.amount,b.currency,b.rate), 0);
   const title = eventTitle || '割り勘精算';
   const lines = [];
-  lines.push(location.href);
   lines.push(`■ ${title}`);
   lines.push(`\u3000合計: ¥${Math.round(total).toLocaleString()}`);
   if (!lastTransfers.length) {
