@@ -1410,7 +1410,7 @@ function buildShareText() {
 }
 function shareResult() {
   const text=buildShareText();
-  if (navigator.share) { navigator.share({title:'割り勘精算',text,url:location.href}).catch(()=>{}); return; }
+  if (navigator.share) { navigator.share({title:'割り勘精算',text}).catch(()=>{}); return; }
   function showCopied(){const el=document.getElementById('resultCopied');el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2500);}
   if (navigator.clipboard&&navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(showCopied).catch(()=>resultFallback(text,showCopied)); }
   else resultFallback(text,showCopied);
