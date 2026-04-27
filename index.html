@@ -1391,12 +1391,22 @@ function renderTransfers(transfers, billBalances) {
 
 // ── Share ──────────────────────────────────────────────────────────────
 function buildShareText() {
-  const total=bills.reduce((s,b)=>s+toJPY(b.amount,b.currency,b.rate),0);
-  const titleStr=eventTitle?'「'+eventTitle+'」':'';
-  const lines=['🍺割り勘精算 '+titleStr,' 合計: ¥'+Math.round(total).toLocaleString(),''];
-  if(!lastTransfers.length){ lines.push('✅ 全員精算済み！'); }
-  else { lastTransfers.forEach(t=>lines.push(`${t.from} → ${t.to} ¥${t.amtJPY.toLocaleString()}`)); }
-  lines.push('── powered by BILL SPLITTER ──');
+  const total = bills.reduce((s,b) => s+toJPY(b.amount,b.currency,b.rate), 0);
+  const title = eventTitle || '割り勘精算';
+  const lines = [];
+  lines.push(location.href);
+  lines.push(`■ ${title}`);
+  lines.push(`\u3000合計: ¥${Math.round(total).toLocaleString()}`);
+  if (!lastTransfers.length) {
+    lines.push('✅ 全員精算済み！');
+  } else {
+    lastTransfers.forEach(t => {
+      lines.push(`・${t.from} → ${t.to}\u3000¥${t.amtJPY.toLocaleString()}`);
+    });
+  }
+  lines.push('');
+  lines.push('powered by BILL SPLITTER');
+  lines.push(location.href);
   return lines.join('\n');
 }
 function shareResult() {
