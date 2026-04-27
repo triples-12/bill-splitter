@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>割り勘計算</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0d2c3e;
+    --paper: #f8fafc;
+    --amber: #FF8709;
+    --amber-light: #ffa040;
+    --amber-pale: #fff3e0;
+    --red: #c0392b;
+    --green: #1a6b3c;
+    --line: #d4e2ec;
+    --muted: #7a9ab0;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(0,64,103,0.04) 28px);
+  }
+
+  /* ── Header ─────────────────────────────────────── */
+  header {
+    background: #004067; padding: 14px 16px;
+    display: flex; align-items: center; gap: 10px;
+    position: sticky; top: 0; z-index: 100;
+    border-bottom: 3px solid var(--amber);
+  }
+  .header-icon { display: flex; align-items: center; flex-shrink: 0; }
+  header h1 {
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-size: 18px; font-weight: 900; color: #fff; letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  header .subtitle { font-size: 10px; color: var(--amber-light); letter-spacing: 0.12em; margin-top: 1px; white-space: nowrap; }
+  .header-text { min-width: 0; }
+  .share-banner {
+    margin: 0 0 0 auto;
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
+  }
+  .share-btn {
+    font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; font-size: 12px;
+    background: var(--amber); color: #fff; border: none; border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    transition: background 0.15s;
+    white-space: nowrap;   /* ★ 折り返し防止 */
+    flex-shrink: 0;
+  }
+  .share-btn:hover { background: var(--amber-light); }
+  .share-copied { font-size: 12px; color: var(--amber-light); opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+  .share-copied.show { opacity: 1; }
+
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 80px; }
+
+  /* ── Readonly banner ─────────────────────────────── */
+  .readonly-banner {
+    background: var(--amber-pale); border: 1.5px solid var(--amber);
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 20px;
+    font-size: 13px; display: flex; align-items: center; gap: 10px;
+  }
+  .readonly-banner strong { font-weight: 700; }
+
+  .sec-title {
+    font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; font-size: 13px;
+    letter-spacing: 0.15em; color: var(--muted); text-transform: uppercase;
+    margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .sec-title::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  .card { background: var(--card); border-radius: 12px; border: 1px solid var(--line); padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+
+  /* ── Member chips ────────────────────────────────── */
+  .member-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; min-height: 20px; }
+  .chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--amber-pale); border: 1.5px solid var(--amber);
+    border-radius: 20px; padding: 5px 12px 5px 6px;
+    font-size: 13px; font-weight: 500; animation: pop 0.2s ease;
+  }
+  @keyframes pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .chip-animal { width: 24px; height: 24px; flex-shrink: 0; }
+  .chip-del { background: none; border: none; cursor: pointer; color: var(--amber); font-size: 16px; padding: 0; line-height: 1; }
+  .chip-del:hover { color: var(--red); }
+  .add-member-row { display: flex; gap: 8px; align-items: center; }
+
+  input[type="text"], input[type="number"] {
+    font-family: 'Noto Sans JP', sans-serif; font-size: 14px;
+    border: 1.5px solid var(--line); border-radius: 8px; padding: 8px 12px;
+    outline: none; background: var(--paper); color: var(--ink); transition: border-color 0.15s;
+  }
+  input[type="text"]:focus, input[type="number"]:focus { border-color: var(--amber); background: #fff; }
+
+  .btn {
+    font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; font-size: 13px;
+    letter-spacing: 0.05em; border: none; border-radius: 8px; padding: 9px 16px;
+    cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .btn-amber { background: var(--amber); color: #fff; }
+  .btn-amber:hover { background: var(--amber-light); transform: translateY(-1px); }
+  .btn-outline { background: transparent; color: var(--amber); border: 1.5px solid var(--amber); }
+  .btn-outline:hover { background: var(--amber-pale); }
+  .btn-red { background: transparent; color: var(--red); border: 1.5px solid #e8c5c0; font-size: 12px; padding: 6px 10px; }
+  .btn-red:hover { background: #fdf0ef; }
+  .btn-green { background: var(--green); color: #fff; padding: 11px 24px; font-size: 15px; }
+  .btn-green:hover { background: #1e7d48; transform: translateY(-1px); }
+  .btn-xs { font-size: 11px !important; padding: 4px 10px !important; border-radius: 6px !important; }
+
+  /* ── Bill rows ───────────────────────────────────── */
+  .bill-row { border: 1.5px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 14px; background: #fdfdfc; position: relative; }
+  .bill-num {
+    position: absolute; top: -1px; left: 14px;
+    background: var(--ink); color: var(--amber-light);
+    font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+    padding: 2px 10px; border-radius: 0 0 6px 6px;
+  }
+  .bill-row-header { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: start; margin-bottom: 14px; }
+  .bill-amount-wrap { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .bill-amount-label { font-size: 11px; color: var(--muted); }
+  .amount-input { width: 140px; text-align: right; font-weight: 700; font-size: 16px; }
+  .payer-wrap { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .payer-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .payer-select {
+    font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
+    border: 1.5px solid var(--line); border-radius: 8px; padding: 7px 10px;
+    background: var(--paper); color: var(--ink); cursor: pointer; outline: none;
+  }
+  .payer-select:focus { border-color: var(--amber); }
+  .sub-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; font-weight: 500; }
+  .dividers-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .all-check-row { display: flex; gap: 8px; margin-bottom: 8px; }
+
+  .divider-btn {
+    font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
+    padding: 5px 12px 5px 6px; border-radius: 20px;
+    border: 1.5px solid var(--line); background: var(--paper); color: var(--muted);
+    cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s;
+    user-select: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .divider-btn.is-active { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600; }
+  .divider-btn .chk-icon { font-size: 11px; line-height: 1; min-width: 10px; }
+  .divider-btn .d-animal { width: 20px; height: 20px; flex-shrink: 0; }
+
+  /* ── Split table ─────────────────────────────────── */
+  .split-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  .split-table th { text-align: left; font-size: 11px; font-weight: 500; color: var(--muted); padding: 4px 8px; letter-spacing: 0.08em; border-bottom: 1px solid var(--line); }
+  .split-table td { padding: 6px 8px; border-bottom: 1px solid #f0ebe0; vertical-align: middle; }
+  .split-amount-cell { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+  .yen-sym { color: var(--muted); font-size: 12px; }
+  .member-cell { display: flex; align-items: center; gap: 7px; font-weight: 500; }
+  .tbl-animal { width: 20px; height: 20px; }
+
+  .split-input {
+    width: 120px; text-align: right; font-size: 14px; font-weight: 500;
+    padding: 6px 10px; border-radius: 6px;
+    border: 1.5px solid var(--line); background: var(--paper); color: var(--ink);
+    font-family: 'Noto Sans JP', sans-serif; outline: none;
+    -moz-appearance: textfield;
+  }
+  .split-input::-webkit-outer-spin-button,
+  .split-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .split-input:focus { border-color: var(--amber); background: #fff; }
+  .split-input.modified { border-color: var(--amber); background: var(--amber-pale); font-weight: 700; }
+
+  .reset-btn {
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    font-size: 15px; padding: 0 3px; line-height: 1; opacity: 0; pointer-events: none;
+  }
+  .reset-btn.visible { opacity: 1; pointer-events: auto; }
+  .reset-btn:hover { color: var(--red); }
+
+  .recalc-note { font-size: 11px; color: var(--muted); margin-top: 6px; font-style: italic; }
+  hr.section-hr { border: none; border-top: 1px dashed var(--line); margin: 16px 0; }
+  .spacer { margin-top: 6px; }
+  .total-badge {
+    font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 900; font-size: 13px;
+    background: var(--ink); color: var(--amber-light); padding: 3px 10px; border-radius: 6px; margin-left: 8px;
+  }
+
+  /* ── Summary ─────────────────────────────────────── */
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .member-summary-card { border: 1.5px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--card); }
+  .member-name-lbl {
+    font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; font-size: 15px;
+    margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .summary-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 4px; }
+  .summary-row .lbl { color: var(--muted); }
+  .summary-row .val { font-weight: 600; }
+  .net-amount { margin-top: 10px; padding-top: 8px; border-top: 2px solid var(--ink); display: flex; justify-content: space-between; font-weight: 700; font-size: 14px; }
+  .net-positive { color: var(--green); }
+  .net-negative { color: var(--red); }
+  .net-zero { color: var(--muted); }
+
+  /* ── Transfers ───────────────────────────────────── */
+  .transfer-list { display: flex; flex-direction: column; gap: 10px; }
+  .transfer-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card); border: 1.5px solid var(--line); border-radius: 10px;
+    padding: 12px 16px; font-size: 14px; animation: slideIn 0.25s ease both;
+  }
+  @keyframes slideIn { from { transform: translateX(-8px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .transfer-from { font-weight: 700; background: var(--red); color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 13px; display: flex; align-items: center; gap: 5px; }
+  .transfer-arrow { font-size: 18px; color: var(--muted); }
+  .transfer-to { font-weight: 700; background: var(--green); color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 13px; display: flex; align-items: center; gap: 5px; }
+  .transfer-amount { margin-left: auto; font-weight: 900; font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 17px; }
+  .no-transfer { text-align: center; padding: 24px; color: var(--green); font-weight: 700; font-size: 15px; }
+  .t-animal { width: 16px; height: 16px; }
+
+  /* ── Share result button ─────────────────────────────── */
+  .share-result-btn {
+    font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; font-size: 13px;
+    background: var(--header, #004067); color: #fff; border: none; border-radius: 8px;
+    padding: 10px 20px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px;
+    transition: background 0.15s; letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .share-result-btn:hover { background: #005a8a; }
+  .result-copied { font-size: 12px; color: var(--amber); opacity: 0; transition: opacity 0.3s; margin-left: 10px; white-space: nowrap; }
+  .result-copied.show { opacity: 1; }
+
+  /* ── Event title ─────────────────────────────────── */
+  .event-title-wrap {
+    margin-bottom: 20px;
+  }
+  .event-title-input {
+    width: 100%;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    border: none;
+    border-bottom: 2px solid var(--line);
+    border-radius: 0;
+    padding: 8px 2px;
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+    letter-spacing: 0.03em;
+    transition: border-color 0.15s;
+  }
+  .event-title-input:focus { border-bottom-color: var(--amber); }
+  .event-title-input::placeholder { color: var(--muted); font-weight: 500; font-size: 16px; }
+  .event-title-display {
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--ink);
+    letter-spacing: 0.03em;
+    padding: 6px 2px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-icon">
+    <!-- Beer mug pictogram SVG -->
+    <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Mug body -->
+      <rect x="4" y="10" width="19" height="20" rx="2" fill="none" stroke="#FF8709" stroke-width="2.2"/>
+      <!-- Handle -->
+      <path d="M23 14 Q31 14 31 20 Q31 26 23 26" fill="none" stroke="#FF8709" stroke-width="2.2" stroke-linecap="round"/>
+      <!-- Foam top -->
+      <path d="M4 10 Q6.5 6 9 10 Q11.5 6 14 10 Q16.5 6 19 10 Q21.5 6 23 10" fill="none" stroke="#FF8709" stroke-width="2" stroke-linecap="round"/>
+      <!-- Beer fill line -->
+      <line x1="7" y1="19" x2="20" y2="19" stroke="#FF870930" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <div>
+    <h1>割り勘計算</h1>
+    <div class="subtitle">BILL SPLITTER</div>
+  </div>
+  <div class="share-banner">
+    <button class="share-btn" id="shareBtn" onclick="shareUrl()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+      </svg>
+      URLをコピー
+    </button>
+    <span class="share-copied" id="shareCopied">✓ コピーしました</span>
+  </div>
+</header>
+
+<main>
+  <div id="readonlyBanner" style="display:none;" class="readonly-banner">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>このページは<strong>閲覧専用</strong>です。新しいイベントを作成するには <a href="?" style="color:var(--amber);font-weight:700;">こちら</a></span>
+  </div>
+
+  <div class="event-title-wrap">
+    <input type="text" id="eventTitleInput" class="event-title-input"
+      placeholder="イベント名を入力（例: 5/1 BBQ大会）"
+      oninput="eventTitle=this.value">
+    <div id="eventTitleDisplay" class="event-title-display" style="display:none;"></div>
+  </div>
+
+  <div class="sec-title">参加者</div>
+  <div class="card">
+    <div class="member-chips" id="memberChips"></div>
+    <div class="add-member-row" id="addMemberRow">
+      <input type="text" id="memberInput" placeholder="名前を入力..." style="flex:1;max-width:220px;">
+      <button class="btn btn-amber" onclick="addMember()">＋ 追加</button>
+    </div>
+  </div>
+
+  <div class="sec-title">
+    会計
+    <span class="total-badge" id="grandTotalBadge">合計: ¥0</span>
+  </div>
+  <div id="billsContainer"></div>
+  <button class="btn btn-outline" id="addBillBtn" style="width:100%;margin-bottom:20px;" onclick="addBill()">＋ 会計を追加</button>
+
+  <button class="btn btn-green" id="calcBtn" style="width:100%;border-radius:10px;margin-bottom:24px;" onclick="calculate()">
+    ⚡ 精算を計算する
+  </button>
+
+  <div id="summarySection" style="display:none;">
+    <div class="sec-title">メンバー別サマリー</div>
+    <div class="summary-grid" id="summaryGrid"></div>
+    <div class="sec-title">精算方法</div>
+    <div class="card">
+      <div class="transfer-list" id="transferList"></div>
+      <div id="shareResultWrap" style="display:none; margin-top:16px; padding-top:14px; border-top:1px dashed var(--line);">
+        <button class="share-result-btn" onclick="shareResult()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          精算結果をシェア
+        </button>
+        <span class="result-copied" id="resultCopied">✓ コピーしました</span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── Animal icons (SVG pictograms, 20×20 viewBox) ───────────────────────
+// 20 animals, enough for large groups
+const ANIMALS = [
+  // 0 cat
+  { name:'cat', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 14 Q2 10 4 7 L4 3 L7 6 Q8.5 5.5 10 5.5 Q11.5 5.5 13 6 L16 3 L16 7 Q18 10 17 14 Q16 17 10 17 Q4 17 3 14Z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+    <circle cx="7.5" cy="10" r="0.8" fill="currentColor"/>
+    <circle cx="12.5" cy="10" r="0.8" fill="currentColor"/>
+    <path d="M9 12.5 Q10 13.5 11 12.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+    <path d="M6 9 L3 8 M14 9 L17 8" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+  </svg>` },
+  // 1 dog
+  { name:'dog', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="11" rx="6.5" ry="5.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <path d="M4 7 Q3 3 5.5 5 Q7 6 10 6 Q13 6 14.5 5 Q17 3 16 7" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+    <path d="M3.5 6.5 Q1 7 2 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+    <path d="M16.5 6.5 Q19 7 18 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+    <circle cx="7.5" cy="10.5" r="0.8" fill="currentColor"/>
+    <circle cx="12.5" cy="10.5" r="0.8" fill="currentColor"/>
+    <path d="M8.5 13 Q10 14 11.5 13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  </svg>` },
+  // 2 bear
+  { name:'bear', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="12" rx="6" ry="5.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="5.5" cy="6.5" r="2.2" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="14.5" cy="6.5" r="2.2" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <ellipse cx="10" cy="13.5" rx="2.5" ry="1.5" stroke="currentColor" stroke-width="1.1" fill="none"/>
+    <circle cx="7.8" cy="11" r="0.8" fill="currentColor"/>
+    <circle cx="12.2" cy="11" r="0.8" fill="currentColor"/>
+  </svg>` },
+  // 3 rabbit
+  { name:'rabbit', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="13" rx="5.5" ry="5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <path d="M7 8 Q6 2 4.5 2 Q3 2 3.5 5 Q4 7 7 8Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+    <path d="M13 8 Q14 2 15.5 2 Q17 2 16.5 5 Q16 7 13 8Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+    <circle cx="7.8" cy="12" r="0.8" fill="currentColor"/>
+    <circle cx="12.2" cy="12" r="0.8" fill="currentColor"/>
+    <path d="M9 14 Q10 15 11 14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  </svg>` },
+  // 4 fox
+  { name:'fox', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 16 Q4 10 10 10 Q16 10 16 16Z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+    <path d="M10 10 Q7 4 3 3 L6 9Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+    <path d="M10 10 Q13 4 17 3 L14 9Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+    <circle cx="7.5" cy="12.5" r="0.8" fill="currentColor"/>
+    <circle cx="12.5" cy="12.5" r="0.8" fill="currentColor"/>
+    <path d="M9 14.5 Q10 15.5 11 14.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  </svg>` },
+  // 5 penguin
+  { name:'penguin', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="12" rx="5" ry="6.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <ellipse cx="10" cy="11.5" rx="3" ry="4.5" stroke="currentColor" stroke-width="1.1" fill="none"/>
+    <ellipse cx="10" cy="5" rx="3" ry="2.8" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="8.5" cy="4.8" r="0.7" fill="currentColor"/>
+    <circle cx="11.5" cy="4.8" r="0.7" fill="currentColor"/>
+    <path d="M9.2 6.5 L10 7.2 L10.8 6.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+  </svg>` },
+  // 6 owl
+  { name:'owl', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M5 18 Q4 12 10 10 Q16 12 15 18Z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+    <path d="M5.5 10 Q5 5 8 3 Q10 2 12 3 Q15 5 14.5 10" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="8" cy="8" r="1.8" stroke="currentColor" stroke-width="1.2" fill="none"/>
+    <circle cx="12" cy="8" r="1.8" stroke="currentColor" stroke-width="1.2" fill="none"/>
+    <circle cx="8" cy="8" r="0.7" fill="currentColor"/>
+    <circle cx="12" cy="8" r="0.7" fill="currentColor"/>
+    <path d="M9.2 10.2 L10 10.8 L10.8 10.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  </svg>` },
+  // 7 frog
+  { name:'frog', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="13" rx="6" ry="4.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="5.5" cy="8" r="2.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="14.5" cy="8" r="2.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="5.5" cy="8" r="1" fill="currentColor"/>
+    <circle cx="14.5" cy="8" r="1" fill="currentColor"/>
+    <path d="M7.5 14.5 Q10 16 12.5 14.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+    <path d="M4 17 L5 15 M16 17 L15 15" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+  </svg>` },
+  // 8 koala
+  { name:'koala', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="11" r="6.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="4" cy="8" r="2.8" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="16" cy="8" r="2.8" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <ellipse cx="10" cy="13" rx="2.2" ry="1.5" stroke="currentColor" stroke-width="1.2" fill="none"/>
+    <circle cx="7.8" cy="10" r="0.8" fill="currentColor"/>
+    <circle cx="12.2" cy="10" r="0.8" fill="currentColor"/>
+  </svg>` },
+  // 9 whale
+  { name:'whale', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 13 Q2 8 8 8 Q14 8 17 11 Q19 13 18 15 Q17 17 14 17 Q8 17 4 15 Q1 14 2 13Z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+    <path d="M17 14 Q19.5 12 19.5 17 Q17 16 17 14Z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/>
+    <circle cx="6" cy="11.5" r="0.8" fill="currentColor"/>
+    <path d="M10 8 Q11 4 13 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+  </svg>` },
+  // 10 panda
+  { name:'panda', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="12" r="6" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="5.5" cy="7" r="2.2" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="14.5" cy="7" r="2.2" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <ellipse cx="8" cy="11" rx="1.5" ry="1.2" stroke="currentColor" stroke-width="1.2" fill="none"/>
+    <ellipse cx="12" cy="11" rx="1.5" ry="1.2" stroke="currentColor" stroke-width="1.2" fill="none"/>
+    <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
+    <circle cx="12" cy="11" r="0.6" fill="currentColor"/>
+    <path d="M8.5 14 Q10 15 11.5 14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+    <ellipse cx="10" cy="13.5" rx="2" ry="1.2" stroke="currentColor" stroke-width="1" fill="none"/>
+  </svg>` },
+  // 11 deer
+  { name:'deer', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="13" rx="5.5" ry="5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <path d="M7 8 Q5 4 4 2 M7 8 Q6 5 8 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+    <path d="M13 8 Q15 4 16 2 M13 8 Q14 5 12 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+    <circle cx="7.8" cy="12" r="0.8" fill="currentColor"/>
+    <circle cx="12.2" cy="12" r="0.8" fill="currentColor"/>
+    <path d="M9 14 Q10 15 11 14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  </svg>` },
+  // 12 duck
+  { name:'duck', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="14" rx="6.5" ry="4.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="14" cy="7" r="3.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <path d="M17.2 7 Q20 6.5 20 8 Q20 9.5 17.2 8.5" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+    <circle cx="15.2" cy="6.3" r="0.7" fill="currentColor"/>
+    <path d="M10 10 Q12 9 14 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+  </svg>` },
+  // 13 elephant
+  { name:'elephant', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="13" rx="7" ry="5.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <path d="M3 11 Q1.5 9 2 7 Q2.5 5 5 7 Q4 9 3 11Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+    <path d="M3 15 Q1 16 2 18" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+    <circle cx="4.5" cy="7.5" r="2" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="15.5" cy="7.5" r="2" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="8" cy="12" r="0.8" fill="currentColor"/>
+    <circle cx="12" cy="12" r="0.8" fill="currentColor"/>
+  </svg>` },
+  // 14 hamster
+  { name:'hamster', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="12" r="6.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="4.5" cy="10" r="2.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="15.5" cy="10" r="2.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="7.8" cy="11.5" r="0.9" fill="currentColor"/>
+    <circle cx="12.2" cy="11.5" r="0.9" fill="currentColor"/>
+    <ellipse cx="10" cy="14" rx="2.5" ry="1.5" stroke="currentColor" stroke-width="1.1" fill="none"/>
+  </svg>` },
+  // 15 lion
+  { name:'lion', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="11" r="5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="10" cy="11" r="7" stroke="currentColor" stroke-width="1" stroke-dasharray="2 1.5" fill="none"/>
+    <circle cx="7.8" cy="10.5" r="0.8" fill="currentColor"/>
+    <circle cx="12.2" cy="10.5" r="0.8" fill="currentColor"/>
+    <ellipse cx="10" cy="13" rx="2" ry="1.2" stroke="currentColor" stroke-width="1.1" fill="none"/>
+    <path d="M6 10 L3 9 M14 10 L17 9" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+  </svg>` },
+  // 16 turtle
+  { name:'turtle', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="12" rx="5.5" ry="4" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <path d="M5.5 10 Q4 8.5 3 9.5 Q2 10.5 3.5 11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+    <path d="M14.5 10 Q16 8.5 17 9.5 Q18 10.5 16.5 11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+    <path d="M7 8.5 Q7.5 6 10 6 Q12.5 6 13 8.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="10" cy="5.5" r="1.8" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <path d="M7.5 16 Q8 17.5 10 17.5 Q12 17.5 12.5 16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+    <path d="M5.5 12 Q5.5 15 7.5 16 M14.5 12 Q14.5 15 12.5 16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  </svg>` },
+  // 17 chick
+  { name:'chick', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="14" rx="5.5" ry="4.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="10" cy="7.5" r="3.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="8.5" cy="7" r="0.8" fill="currentColor"/>
+    <circle cx="11.5" cy="7" r="0.8" fill="currentColor"/>
+    <path d="M9 9 L10 10 L11 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+    <path d="M7 4 Q8 2 10 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+    <path d="M8 17 L7.5 19 M12 17 L12.5 19" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+  </svg>` },
+  // 18 pig
+  { name:'pig', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="12" r="6.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="3.5" cy="9.5" r="1.8" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="16.5" cy="9.5" r="1.8" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <ellipse cx="10" cy="13.5" rx="2.5" ry="1.8" stroke="currentColor" stroke-width="1.2" fill="none"/>
+    <circle cx="9.2" cy="13.5" r="0.5" fill="currentColor"/>
+    <circle cx="10.8" cy="13.5" r="0.5" fill="currentColor"/>
+    <circle cx="7.8" cy="10.5" r="0.8" fill="currentColor"/>
+    <circle cx="12.2" cy="10.5" r="0.8" fill="currentColor"/>
+    <path d="M12.5 7 Q13 5 12 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  </svg>` },
+  // 19 sheep
+  { name:'sheep', svg:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="13" rx="5.5" ry="4.5" stroke="currentColor" stroke-width="1.4" fill="none"/>
+    <circle cx="7" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="13" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="10" cy="7" r="2.2" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="5" cy="10.5" r="2" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="15" cy="10.5" r="2" stroke="currentColor" stroke-width="1.3" fill="none"/>
+    <circle cx="8.2" cy="12.5" r="0.8" fill="currentColor"/>
+    <circle cx="11.8" cy="12.5" r="0.8" fill="currentColor"/>
+    <path d="M9 14.5 Q10 15.5 11 14.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  </svg>` },
+];
+
+function getAnimalSvg(idx, size=20, color='currentColor') {
+  const a = ANIMALS[idx % ANIMALS.length];
+  return a.svg
+    .replace('viewBox="0 0 20 20"', `viewBox="0 0 20 20" width="${size}" height="${size}"`)
+    .replace(/currentColor/g, color);
+}
+
+// ── State ──────────────────────────────────────────────────────────────
+let members    = [];  // { name, animalIdx }
+let bills      = [];
+let billId     = 0;
+let readOnly   = false;
+let animalIdx  = 0;
+let eventTitle = '';
+
+// ── URL share / load ───────────────────────────────────────────────────
+function encodeState() {
+  const state = {
+    members: members.map(m => ({ n: m.name, a: m.animalIdx })),
+    bills: bills.map(b => ({
+      id:   b.id,
+      desc: b.desc,
+      amt:  b.amount,
+      pay:  b.payer,
+      div:  b.dividers,
+      ovr:  b.overrides,
+    })),
+    billId,
+    animalIdx,
+    title: eventTitle,
+  };
+  return btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+}
+
+function decodeState(hash) {
+  try {
+    const state = JSON.parse(decodeURIComponent(escape(atob(hash))));
+    members    = (state.members||[]).map(m => ({ name: m.n, animalIdx: m.a }));
+    billId     = state.billId || 0;
+    animalIdx  = state.animalIdx || members.length;
+    eventTitle = state.title || '';
+    bills = (state.bills||[]).map(b => ({
+      id:        b.id,
+      desc:      b.desc || '',
+      amount:    b.amt  || 0,
+      payer:     b.pay  || '',
+      dividers:  b.div  || [],
+      overrides: b.ovr  || {},
+    }));
+    return true;
+  } catch(e) { return false; }
+}
+
+function shareUrl() {
+  const code = encodeState();
+  const url  = `${location.origin}${location.pathname}#${code}`;
+
+  function showCopied() {
+    const el = document.getElementById('shareCopied');
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2500);
+  }
+
+  // navigator.clipboard は HTTPS or localhost のみ動作する
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(showCopied).catch(() => fallback(url));
+  } else {
+    fallback(url);
+  }
+}
+
+function fallback(url) {
+  // execCommand fallback（file:// や HTTP でも動く）
+  const ta = document.createElement('textarea');
+  ta.value = url;
+  ta.style.cssText = 'position:fixed;top:-999px;left:-999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(ta);
+  if (ok) {
+    const el = document.getElementById('shareCopied');
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2500);
+  } else {
+    // 最終手段: promptダイアログでURLを表示してユーザーが手動コピー
+    prompt('このURLをコピーしてシェアしてください:', url);
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const hash = location.hash.slice(1);
+  if (hash && decodeState(hash)) {
+    readOnly = true;
+    document.getElementById('readonlyBanner').style.display = 'flex';
+    document.getElementById('addMemberRow').style.display   = 'none';
+    document.getElementById('addBillBtn').style.display     = 'none';
+    document.getElementById('calcBtn').style.display        = 'none';
+    document.getElementById('shareBtn').style.display       = 'none';
+    // show event title as display text, hide input
+    if (eventTitle) {
+      const inp = document.getElementById('eventTitleInput');
+      const dsp = document.getElementById('eventTitleDisplay');
+      if (inp) inp.style.display = 'none';
+      if (dsp) { dsp.textContent = eventTitle; dsp.style.display = ''; }
+    } else {
+      const wrap = document.querySelector('.event-title-wrap');
+      if (wrap) wrap.style.display = 'none';
+    }
+    renderMembers();
+    bills.forEach(b => {
+      const wrap = document.createElement('div');
+      wrap.className = 'bill-row'; wrap.id = `bill-${b.id}`;
+      document.getElementById('billsContainer').appendChild(wrap);
+      refreshBillUI(b.id);
+    });
+    updateGrandTotal();
+    // Auto-calculate on view
+    calculate();
+  }
+  // else: blank slate, no default names
+});
+
+// ── Members ────────────────────────────────────────────────────────────
+function addMember() {
+  const inp  = document.getElementById('memberInput');
+  const name = inp.value.trim();
+  if (!name || members.find(m => m.name === name)) { inp.focus(); return; }
+  members.push({ name, animalIdx: animalIdx++ });
+  inp.value = '';
+  renderMembers();
+  bills.forEach(b => { if (!b.dividers.includes(name)) b.dividers.push(name); refreshBillUI(b.id); });
+  updatePayerSelects();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('memberInput').addEventListener('keydown', e => { if (e.key === 'Enter') addMember(); });
+});
+
+function removeMember(name) {
+  members = members.filter(m => m.name !== name);
+  bills.forEach(b => {
+    b.dividers = b.dividers.filter(d => d !== name);
+    if (b.payer === name) b.payer = '';
+    delete b.overrides[name];
+    refreshBillUI(b.id);
+  });
+  renderMembers();
+  updatePayerSelects();
+}
+
+function getMember(name) { return members.find(m => m.name === name); }
+function memberAnimal(name) { const m = getMember(name); return m ? m.animalIdx : 0; }
+
+function renderMembers() {
+  const c = document.getElementById('memberChips');
+  c.innerHTML = '';
+  members.forEach(m => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.innerHTML =
+      `<span class="chip-animal">${getAnimalSvg(m.animalIdx, 22, 'var(--amber)')}</span>` +
+      esc(m.name) +
+      (readOnly ? '' : ` <button class="chip-del" onclick="removeMember('${ea(m.name)}')">×</button>`);
+    c.appendChild(chip);
+  });
+}
+
+// ── Bills ──────────────────────────────────────────────────────────────
+function addBill() {
+  const b = { id: billId++, desc: '', amount: 0, payer: members[0]?.name || '', dividers: members.map(m=>m.name), overrides: {} };
+  bills.push(b);
+  const wrap = document.createElement('div');
+  wrap.className = 'bill-row'; wrap.id = `bill-${b.id}`;
+  document.getElementById('billsContainer').appendChild(wrap);
+  refreshBillUI(b.id);
+  updateGrandTotal();
+}
+
+function getBill(id) { return bills.find(b => b.id === id); }
+
+function refreshBillUI(id) {
+  const b   = getBill(id);
+  const div = document.getElementById(`bill-${id}`);
+  if (!div) return;
+  const idx = bills.indexOf(b) + 1;
+  const ro  = readOnly;
+
+  const divBtns = members.map(m => {
+    const active = b.dividers.includes(m.name);
+    return `<button type="button" class="divider-btn${active?' is-active':''}"
+      ${ro ? 'disabled style="cursor:default;opacity:0.85;"' : `onclick="toggleDivider(${id},'${ea(m.name)}')"`}
+    >
+      <span class="d-animal">${getAnimalSvg(m.animalIdx, 18, active ? '#fff' : 'var(--muted)')}</span>
+      <span class="chk-icon">${active?'✓':''}</span>
+      ${esc(m.name)}
+    </button>`;
+  }).join('');
+
+  div.innerHTML = `
+    <div class="bill-num">会計 ${idx}</div>
+    <div class="spacer"></div>
+    <div class="bill-row-header">
+      <input type="text" placeholder="品目・店名" value="${esc(b.desc)}"
+        ${ro ? 'readonly style="background:var(--paper);color:var(--muted);cursor:default;"' : `oninput="getBill(${id}).desc=this.value"`}
+        style="width:100%">
+      <div class="payer-wrap">
+        <div class="payer-label">支払った人</div>
+        <select class="payer-select" ${ro ? 'disabled' : `onchange="getBill(${id}).payer=this.value"`}>
+          <option value="">-- 選択 --</option>
+          ${members.map(m=>`<option value="${esc(m.name)}"${b.payer===m.name?' selected':''}>${esc(m.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="bill-amount-wrap">
+        <div class="bill-amount-label">合計金額</div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span class="yen-sym">¥</span>
+          <input type="number" class="amount-input" min="0" placeholder="0"
+            value="${b.amount||''}"
+            ${ro ? 'readonly style="background:var(--paper);cursor:default;"' : `onchange="onAmountChange(${id},this.value)"`}>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub-label">対象メンバー</div>
+    ${ro ? '' : `<div class="all-check-row">
+      <button class="btn btn-outline btn-xs" onclick="setAllDividers(${id},true)">全員</button>
+      <button class="btn btn-outline btn-xs" onclick="setAllDividers(${id},false)">クリア</button>
+    </div>`}
+    <div class="dividers-grid" id="dividers-${id}">${divBtns}</div>
+
+    <hr class="section-hr">
+    <div class="sub-label">割り振り金額${ro?'':' （手動修正可）'}</div>
+    <div id="split-table-${id}"></div>
+    ${ro ? '' : '<div class="recalc-note">※ 金額を変更してEnterまたはタブキーで確定 → 差額が自動再配分されます</div>'}
+
+    ${ro ? '' : `<div style="margin-top:12px;text-align:right;">
+      <button class="btn btn-red" onclick="removeBill(${id})">この会計を削除</button>
+    </div>`}
+  `;
+
+  renderSplitTable(id);
+}
+
+function removeBill(id) {
+  bills = bills.filter(b => b.id !== id);
+  document.getElementById(`bill-${id}`)?.remove();
+  bills.forEach((b,i) => {
+    const n = document.querySelector(`#bill-${b.id} .bill-num`);
+    if (n) n.textContent = `会計 ${i+1}`;
+  });
+  updateGrandTotal();
+}
+
+function updateGrandTotal() {
+  const total = bills.reduce((s,b)=>s+b.amount,0);
+  document.getElementById('grandTotalBadge').textContent = `合計: ¥${total.toLocaleString()}`;
+}
+
+function onAmountChange(id, val) {
+  const b = getBill(id);
+  b.amount = parseFloat(val) || 0;
+  b.overrides = {};
+  renderSplitTable(id);
+  updateGrandTotal();
+}
+
+function toggleDivider(id, name) {
+  const b = getBill(id);
+  const wasActive = b.dividers.includes(name);
+  if (wasActive) { b.dividers = b.dividers.filter(d => d !== name); delete b.overrides[name]; }
+  else           { b.dividers.push(name); }
+
+  const grid = document.getElementById(`dividers-${id}`);
+  if (grid) {
+    grid.querySelectorAll('.divider-btn').forEach(btn => {
+      const animal = btn.querySelector('.d-animal');
+      const chk    = btn.querySelector('.chk-icon');
+      // find matching member by iterating members in order
+      const idx    = [...grid.querySelectorAll('.divider-btn')].indexOf(btn);
+      if (idx < 0 || idx >= members.length) return;
+      const m = members[idx];
+      if (m.name !== name) return;
+      const nowActive = !wasActive;
+      btn.classList.toggle('is-active', nowActive);
+      chk.textContent = nowActive ? '✓' : '';
+      if (animal) animal.innerHTML = getAnimalSvg(m.animalIdx, 18, nowActive ? '#fff' : 'var(--muted)');
+    });
+  }
+  renderSplitTable(id);
+}
+
+function setAllDividers(id, val) {
+  const b = getBill(id);
+  b.dividers  = val ? members.map(m=>m.name) : [];
+  b.overrides = {};
+  refreshBillUI(id);
+}
+
+function updatePayerSelects() {
+  bills.forEach(b => {
+    const sel = document.getElementById(`bill-${b.id}`)?.querySelector('.payer-select');
+    if (!sel) return;
+    const cur = b.payer;
+    sel.innerHTML = `<option value="">-- 選択 --</option>` +
+      members.map(m=>`<option value="${esc(m.name)}"${cur===m.name?' selected':''}>${esc(m.name)}</option>`).join('');
+  });
+}
+
+// ── Split table ────────────────────────────────────────────────────────
+function computeSplits(b) {
+  const { dividers, overrides, amount } = b;
+  if (!dividers.length || !amount) return {};
+  const fixed    = dividers.filter(d => overrides[d] !== undefined);
+  const free     = dividers.filter(d => overrides[d] === undefined);
+  const fixedSum = fixed.reduce((s,d) => s + overrides[d], 0);
+  const perFree  = free.length ? Math.round((amount - fixedSum) / free.length) : 0;
+  const result   = {};
+  dividers.forEach(d => { result[d] = overrides[d] !== undefined ? overrides[d] : perFree; });
+  return result;
+}
+
+function renderSplitTable(id) {
+  const b    = getBill(id);
+  const cont = document.getElementById(`split-table-${id}`);
+  if (!cont) return;
+  if (!b.dividers.length) {
+    cont.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">対象メンバーを選択してください</div>';
+    return;
+  }
+  const splits   = computeSplits(b);
+  const splitSum = Object.values(splits).reduce((s,v)=>s+v,0);
+  const diff     = Math.abs(splitSum - b.amount);
+  const ro       = readOnly;
+
+  cont.innerHTML = `
+    <table class="split-table">
+      <thead><tr>
+        <th style="width:40%">メンバー</th>
+        <th style="text-align:right">割り勘額</th>
+        <th style="width:28px"></th>
+      </tr></thead>
+      <tbody>
+        ${b.dividers.map((d,i) => {
+          const isOvr = b.overrides[d] !== undefined;
+          const ai    = memberAnimal(d);
+          return `<tr>
+            <td><div class="member-cell">
+              <span class="tbl-animal">${getAnimalSvg(ai, 18, 'var(--muted)')}</span>
+              ${esc(d)}
+            </div></td>
+            <td>
+              <div class="split-amount-cell">
+                <span class="yen-sym">¥</span>
+                ${ro
+                  ? `<span style="font-weight:700;font-size:14px;">${(splits[d]??0).toLocaleString()}</span>`
+                  : `<input type="number" class="split-input${isOvr?' modified':''}"
+                      value="${splits[d]??0}"
+                      onfocus="this.select()"
+                      onkeydown="if(event.key==='Enter')this.blur()"
+                      onchange="onSplitChange(${id},'${ea(d)}',this)">`
+                }
+              </div>
+            </td>
+            <td>${ro ? '' : `<button class="reset-btn${isOvr?' visible':''}" title="均等に戻す" onclick="resetOverride(${id},'${ea(d)}')">↺</button>`}</td>
+          </tr>`;
+        }).join('')}
+        <tr id="split-total-${id}" style="background:var(--amber-pale)">
+          <td style="font-weight:700;font-size:12px;color:var(--muted)">合計</td>
+          <td style="text-align:right;font-weight:700" colspan="2">
+            ¥${splitSum.toLocaleString()}
+            ${diff>1?`<span style="color:var(--red);font-size:11px;margin-left:4px;">（差額 ¥${Math.round(diff)}）</span>`:''}
+          </td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
+function onSplitChange(id, name, inputEl) {
+  const b   = getBill(id);
+  const val = parseFloat(inputEl.value) || 0;
+  b.overrides[name] = val;
+  inputEl.classList.add('modified');
+  const resetBtn = inputEl.closest('tr')?.querySelector('.reset-btn');
+  if (resetBtn) resetBtn.classList.add('visible');
+
+  const splits = computeSplits(b);
+  const cont   = document.getElementById(`split-table-${id}`);
+  if (!cont) return;
+  const allInputs = cont.querySelectorAll('tbody .split-input');
+  allInputs.forEach((inp, i) => {
+    const member = b.dividers[i];
+    if (!member || member === name) return;
+    if (b.overrides[member] !== undefined) return;
+    inp.value = splits[member] ?? 0;
+  });
+  const splitSum = Object.values(splits).reduce((s,v)=>s+v,0);
+  const diff     = Math.abs(splitSum - b.amount);
+  const totalRow = document.getElementById(`split-total-${id}`);
+  if (totalRow) {
+    totalRow.cells[1].innerHTML = `¥${splitSum.toLocaleString()}` +
+      (diff>1?`<span style="color:var(--red);font-size:11px;margin-left:4px;">（差額 ¥${Math.round(diff)}）</span>`:'');
+  }
+}
+
+function resetOverride(id, name) {
+  delete getBill(id).overrides[name];
+  renderSplitTable(id);
+}
+
+// ── Calculate ──────────────────────────────────────────────────────────
+function calculate() {
+  const paid = {}, owed = {};
+  members.forEach(m => { paid[m.name] = 0; owed[m.name] = 0; });
+  bills.forEach(b => {
+    if (!b.amount) return;
+    if (b.payer && members.find(m=>m.name===b.payer)) paid[b.payer] += b.amount;
+    const splits = computeSplits(b);
+    Object.entries(splits).forEach(([n,v]) => { if (members.find(m=>m.name===n)) owed[n] += v; });
+  });
+  const balance = {};
+  members.forEach(m => { balance[m.name] = (paid[m.name]||0) - (owed[m.name]||0); });
+  renderSummary(paid, owed, balance);
+  renderTransfers(minimizeTransfers(balance));
+  const sec = document.getElementById('summarySection');
+  sec.style.display = '';
+  if (!readOnly) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function minimizeTransfers(balance) {
+  const cred=[], debt=[];
+  Object.entries(balance).forEach(([n,v])=>{
+    if (v> 0.5) cred.push({name:n,amt:v});
+    if (v<-0.5) debt.push({name:n,amt:-v});
+  });
+  cred.sort((a,b)=>b.amt-a.amt); debt.sort((a,b)=>b.amt-a.amt);
+  const transfers=[];
+  let ci=0,di=0;
+  while(ci<cred.length && di<debt.length){
+    const c=cred[ci],d=debt[di],amt=Math.min(c.amt,d.amt);
+    transfers.push({from:d.name,to:c.name,amount:Math.round(amt)});
+    c.amt-=amt; d.amt-=amt;
+    if(c.amt<0.5)ci++; if(d.amt<0.5)di++;
+  }
+  return transfers;
+}
+
+function renderSummary(paid, owed, balance) {
+  const grid = document.getElementById('summaryGrid');
+  grid.innerHTML='';
+  members.forEach(m => {
+    const net=Math.round(balance[m.name]);
+    const cls=net>0?'net-positive':net<0?'net-negative':'net-zero';
+    const lbl=net>0?'受け取り':net<0?'支払い':'精算不要';
+    const card=document.createElement('div');
+    card.className='member-summary-card';
+    card.innerHTML=`
+      <div class="member-name-lbl">
+        <span style="width:22px;height:22px;display:inline-flex;">${getAnimalSvg(m.animalIdx,22,'var(--amber)')}</span>
+        ${esc(m.name)}
+      </div>
+      <div class="summary-row"><span class="lbl">立替払い</span><span class="val">¥${Math.round(paid[m.name]||0).toLocaleString()}</span></div>
+      <div class="summary-row"><span class="lbl">割り勘負担</span><span class="val">¥${Math.round(owed[m.name]||0).toLocaleString()}</span></div>
+      <div class="net-amount ${cls}"><span>${lbl}</span><span>¥${Math.abs(net).toLocaleString()}</span></div>`;
+    grid.appendChild(card);
+  });
+}
+
+// stores last computed transfers for sharing
+let lastTransfers = [];
+
+function renderTransfers(transfers) {
+  lastTransfers = transfers;
+  const list=document.getElementById('transferList');
+  const wrap=document.getElementById('shareResultWrap');
+  if(!transfers.length){
+    list.innerHTML='<div class="no-transfer">✅ 全員精算済みです！</div>';
+    if(wrap) wrap.style.display='none';
+    return;
+  }
+  list.innerHTML='';
+  transfers.forEach((t,i)=>{
+    const item=document.createElement('div');
+    item.className='transfer-item'; item.style.animationDelay=`${i*0.06}s`;
+    const fa=memberAnimal(t.from), ta=memberAnimal(t.to);
+    item.innerHTML=`
+      <span class="transfer-from">
+        <span class="t-animal">${getAnimalSvg(fa,16,'#fff')}</span>${esc(t.from)}
+      </span>
+      <span class="transfer-arrow">→</span>
+      <span class="transfer-to">
+        <span class="t-animal">${getAnimalSvg(ta,16,'#fff')}</span>${esc(t.to)}
+      </span>
+      <span class="transfer-amount">¥${t.amount.toLocaleString()}</span>`;
+    list.appendChild(item);
+  });
+  if(wrap) wrap.style.display='';
+}
+
+function buildShareText() {
+  const total    = bills.reduce((s,b)=>s+b.amount,0);
+  const titleStr = eventTitle ? '「' + eventTitle + '」' : '';
+  const lines = ['🍺割り勘精算 ' + titleStr];
+  lines.push(' 合計: ¥' + total.toLocaleString());
+  lines.push('');
+  if(lastTransfers.length === 0){
+    lines.push('✅ 全員精算済み！');
+  } else {
+    lastTransfers.forEach(t => {
+      lines.push(`${t.from} → ${t.to} ¥${t.amount.toLocaleString()}`);
+    });
+  }
+  lines.push('── powered by BILL SPLITTER ──');
+  return lines.join('\n');
+}
+
+function shareResult() {
+  const text = buildShareText();
+  const url  = location.href;
+
+  // Web Share API: triggers native share sheet on mobile (LINE, Messages, etc.)
+  if (navigator.share) {
+    navigator.share({ title: '割り勘精算', text, url })
+      .catch(() => {}); // user cancelled — no error needed
+    return;
+  }
+
+  // Fallback: clipboard copy
+  function showCopied() {
+    const el = document.getElementById('resultCopied');
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2500);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(showCopied).catch(() => resultFallback(text));
+  } else {
+    resultFallback(text);
+  }
+}
+
+function resultFallback(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-999px;left:-999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(ta);
+  if (ok) {
+    const el = document.getElementById('resultCopied');
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2500);
+  } else {
+    prompt('精算結果をコピーしてシェアしてください:', text);
+  }
+}
+
+// ── Utils ──────────────────────────────────────────────────────────────
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function ea(s)  { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+</script>
+</body>
+</html>
