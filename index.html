@@ -258,6 +258,55 @@
     letter-spacing: 0.03em;
     padding: 6px 2px;
   }
+
+  /* ── Currency ───────────────────────────────────── */
+  .currency-row {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .currency-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .currency-select {
+    font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
+    border: 1.5px solid var(--line); border-radius: 8px; padding: 6px 10px;
+    background: var(--paper); color: var(--ink); cursor: pointer; outline: none;
+  }
+  .currency-select:focus { border-color: var(--amber); }
+  .rate-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--paper); border: 1.5px solid var(--line);
+    border-radius: 8px; padding: 5px 10px; cursor: pointer;
+    font-size: 12px; color: var(--muted); transition: border-color 0.12s;
+    white-space: nowrap;
+  }
+  .rate-badge:hover { border-color: var(--amber); color: var(--ink); }
+  .rate-badge .rate-val { font-weight: 700; color: var(--ink); }
+  .rate-edit-wrap {
+    display: none; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .rate-edit-wrap.open { display: flex; }
+  .rate-edit-input {
+    width: 90px; text-align: right; font-size: 14px; font-weight: 700;
+    padding: 5px 8px; border-radius: 6px;
+    border: 1.5px solid var(--amber); background: var(--amber-pale); color: var(--ink);
+    font-family: 'Noto Sans JP', sans-serif; outline: none;
+    -moz-appearance: textfield;
+  }
+  .rate-edit-input::-webkit-outer-spin-button,
+  .rate-edit-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .rate-refresh-btn {
+    font-size: 11px; padding: 5px 10px; border-radius: 6px;
+    background: transparent; color: var(--muted); border: 1.5px solid var(--line);
+    cursor: pointer; white-space: nowrap;
+  }
+  .rate-refresh-btn:hover { border-color: var(--amber); color: var(--amber); }
+  .jpy-hint {
+    font-size: 11px; color: var(--muted); margin-top: 3px; text-align: right;
+    min-height: 14px;
+  }
+  .jpy-hint.active { color: var(--amber); font-weight: 500; }
+  .transfer-jpy { font-size: 11px; color: var(--muted); text-align: right; margin-top: 1px; }
+  .rate-loading { font-size: 11px; color: var(--muted); font-style: italic; }
+
 </style>
 </head>
 <body>
@@ -288,7 +337,6 @@
 </header>
 
 <main>
-  <!-- 接続状態バナー -->
   <div id="connectingBanner" class="readonly-banner" style="display:none;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <span>接続中...</span>
@@ -347,7 +395,7 @@
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey:            "AIzaSyDXgZG_yzDAoci40bEqOhh-kEoc7honNCU",
@@ -362,17 +410,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
 
-// ── ルームID ──────────────────────────────────────────────────────────
 function getRoomId() {
-  const params = new URLSearchParams(location.search);
-  return params.get('room');
+  return new URLSearchParams(location.search).get('room');
 }
 
-function genRoomId() {
-  return Math.random().toString(36).slice(2,8).toUpperCase();
-}
-
-// ── 保存（デバウンス付き） ────────────────────────────────────────────
 let saveTimer = null;
 function scheduleSave() {
   if (!currentRoomId) return;
@@ -387,18 +428,15 @@ async function saveToFirebase() {
     members:   members.map(m => ({ n: m.name, a: m.animalIdx })),
     bills:     bills.map(b => ({
       id:  b.id, desc: b.desc, amt: b.amount,
-      pay: b.payer, div: b.dividers, ovr: b.overrides
+      pay: b.payer, div: b.dividers, ovr: b.overrides,
+      cur: b.currency, rate: b.rate
     })),
-    billId,
-    animalIdx,
-    ts: Date.now()
+    billId, animalIdx, ts: Date.now()
   };
   await set(ref(db, 'rooms/' + currentRoomId), data);
 }
 
-// ── Firebaseからロード & リアルタイム購読 ──────────────────────────
 let isRemoteUpdate = false;
-
 function subscribeRoom(roomId) {
   document.getElementById('connectingBanner').style.display = 'flex';
   onValue(ref(db, 'rooms/' + roomId), (snapshot) => {
@@ -406,22 +444,18 @@ function subscribeRoom(roomId) {
     document.getElementById('newEventBanner').style.display   = 'flex';
     const data = snapshot.val();
     if (!data) return;
-
     isRemoteUpdate = true;
-    eventTitle  = data.title    || '';
-    members     = (data.members || []).map(m => ({ name: m.n, animalIdx: m.a }));
-    billId      = data.billId   || 0;
-    animalIdx   = data.animalIdx || members.length;
-    bills       = (data.bills   || []).map(b => ({
-      id: b.id, desc: b.desc || '', amount: b.amt || 0,
-      payer: b.pay || '', dividers: b.div || [], overrides: b.ovr || {}
+    eventTitle = data.title || '';
+    members    = (data.members||[]).map(m => ({ name: m.n, animalIdx: m.a }));
+    billId     = data.billId   || 0;
+    animalIdx  = data.animalIdx || members.length;
+    bills      = (data.bills||[]).map(b => ({
+      id: b.id, desc: b.desc||'', amount: b.amt||0,
+      payer: b.pay||'', dividers: b.div||[], overrides: b.ovr||({}),
+      currency: b.cur||'JPY', rate: b.rate||1
     }));
-
-    // タイトル反映
     const titleInp = document.getElementById('eventTitleInput');
     if (titleInp) titleInp.value = eventTitle;
-
-    // UI再描画
     renderMembers();
     document.getElementById('billsContainer').innerHTML = '';
     bills.forEach(b => {
@@ -435,25 +469,17 @@ function subscribeRoom(roomId) {
   });
 }
 
-// ── Init ──────────────────────────────────────────────────────────────
 window.__firebaseSave = scheduleSave;
-
 window.addEventListener('DOMContentLoaded', async () => {
   const roomId = getRoomId();
   if (roomId) {
     currentRoomId = roomId;
     subscribeRoom(roomId);
   }
-  // else: 新規 — 空白スタート、最初のaddMember/addBillでルーム作成
   document.getElementById('memberInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') addMember();
   });
 });
-
-// グローバルに公開
-window.__db    = db;
-window.__ref   = ref;
-window.__set   = set;
 window.__dbSet = (path, data) => set(ref(db, path), data);
 </script>
 
@@ -659,33 +685,147 @@ function getAnimalSvg(idx, size=20, color='currentColor') {
     .replace(/currentColor/g, color);
 }
 
+// ── 通貨定義 ──────────────────────────────────────────────────────────
+const CURRENCIES = [
+  { code:'JPY', symbol:'¥',  flag:'🇯🇵', name:'日本円' },
+  { code:'USD', symbol:'$',  flag:'🇺🇸', name:'米ドル' },
+  { code:'EUR', symbol:'€',  flag:'🇪🇺', name:'ユーロ' },
+  { code:'GBP', symbol:'£',  flag:'🇬🇧', name:'英ポンド' },
+  { code:'KRW', symbol:'₩',  flag:'🇰🇷', name:'韓国ウォン' },
+  { code:'CNY', symbol:'¥',  flag:'🇨🇳', name:'人民元' },
+  { code:'THB', symbol:'฿',  flag:'🇹🇭', name:'タイバーツ' },
+  { code:'AUD', symbol:'A$', flag:'🇦🇺', name:'豪ドル' },
+  { code:'SGD', symbol:'S$', flag:'🇸🇬', name:'シンガポールドル' },
+  { code:'HKD', symbol:'HK$',flag:'🇭🇰', name:'香港ドル' },
+  { code:'TWD', symbol:'NT$',flag:'🇹🇼', name:'台湾ドル' },
+  { code:'MYR', symbol:'RM', flag:'🇲🇾', name:'マレーシアリンギット' },
+];
+
+function getCurrency(code) { return CURRENCIES.find(c=>c.code===code) || CURRENCIES[0]; }
+
+// ── 為替レートキャッシュ（JPYベース） ────────────────────────────────
+// rates[code] = 1 code あたりの JPY
+// ── 為替レート: メモリキャッシュ + localStorage永続化 ─────────────
+const rateCache = { JPY: 1 };
+const LS_KEY = 'warikan_rates';
+
+// 起動時にlocalStorageから復元
+(function loadStoredRates() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    Object.entries(stored).forEach(([code, entry]) => {
+      // 24時間以内のデータは復元
+      if (entry && entry.rate && Date.now() - (entry.ts||0) < 24*60*60*1000) {
+        rateCache[code] = entry.rate;
+      }
+    });
+  } catch(e) {}
+})();
+
+function saveRateToLS(code, rate) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    stored[code] = { rate, ts: Date.now() };
+    localStorage.setItem(LS_KEY, JSON.stringify(stored));
+  } catch(e) {}
+}
+
+function getStoredRate(code) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    const entry  = stored[code];
+    if (entry && entry.rate) return { rate: entry.rate, ts: entry.ts };
+  } catch(e) {}
+  return null;
+}
+
+// コードごとの最終取得時刻（メモリ）
+const rateFetchedAt = {};
+
+async function fetchRate(code) {
+  if (code === 'JPY') return 1;
+
+  // メモリキャッシュ（10分以内）
+  if (rateCache[code] && rateFetchedAt[code] && Date.now() - rateFetchedAt[code] < 10*60*1000) {
+    return rateCache[code];
+  }
+
+  // API1: open.er-api.com
+  try {
+    const res  = await Promise.race([
+      fetch(`https://open.er-api.com/v6/latest/${code}`),
+      new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 5000))
+    ]);
+    const json = await res.json();
+    if (json.result === 'success' && json.rates?.JPY) {
+      const rate = json.rates['JPY'];
+      rateCache[code]      = rate;
+      rateFetchedAt[code]  = Date.now();
+      saveRateToLS(code, rate);
+      return rate;
+    }
+  } catch(e) {}
+
+  // API2: frankfurter.app (フォールバック)
+  try {
+    const res  = await Promise.race([
+      fetch(`https://api.frankfurter.app/latest?from=${code}&to=JPY`),
+      new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 5000))
+    ]);
+    const json = await res.json();
+    if (json.rates?.JPY) {
+      const rate = json.rates['JPY'];
+      rateCache[code]      = rate;
+      rateFetchedAt[code]  = Date.now();
+      saveRateToLS(code, rate);
+      return rate;
+    }
+  } catch(e) {}
+
+  // localStorage の過去データを使う
+  const stored = getStoredRate(code);
+  if (stored) {
+    rateCache[code] = stored.rate;
+    return stored.rate;
+  }
+
+  // メモリキャッシュの古いデータも使う
+  if (rateCache[code]) return rateCache[code];
+
+  return null;
+}
+
+function toJPY(amount, currency, rate) {
+  if (currency === 'JPY') return amount;
+  return Math.round(amount * rate);
+}
+
+function fmtCurrency(amount, code) {
+  const c = getCurrency(code);
+  if (code === 'KRW' || code === 'JPY') {
+    return c.symbol + Math.round(amount).toLocaleString();
+  }
+  return c.symbol + Number(amount).toFixed(2);
+}
+
 // ── State ──────────────────────────────────────────────────────────────
-let members      = [];
-let bills        = [];
-let billId       = 0;
-let animalIdx    = 0;
-let eventTitle   = '';
+let members       = [];
+let bills         = [];
+let billId        = 0;
+let animalIdx     = 0;
+let eventTitle    = '';
 let currentRoomId = null;
 let lastTransfers = [];
 
-// ── 保存トリガー ──────────────────────────────────────────────────────
-function save() {
-  if (window.__firebaseSave) window.__firebaseSave();
-}
+function save() { if (window.__firebaseSave) window.__firebaseSave(); }
 
-// ── ルーム作成（初回データ入力時） ────────────────────────────────────
 async function ensureRoom() {
   if (currentRoomId) return;
-  currentRoomId = genRoomId();
-  // URLをroomパラメータ付きに更新（リロードなし）
+  currentRoomId = Math.random().toString(36).slice(2,8).toUpperCase();
   const url = new URL(location.href);
   url.searchParams.set('room', currentRoomId);
   history.replaceState(null, '', url.toString());
   document.getElementById('newEventBanner').style.display = 'flex';
-}
-
-function genRoomId() {
-  return Math.random().toString(36).slice(2,8).toUpperCase();
 }
 
 // ── URLシェア ─────────────────────────────────────────────────────────
@@ -702,53 +842,41 @@ function shareUrl() {
     fallbackCopy(url, showCopied);
   }
 }
-
 function fallbackCopy(url, cb) {
   const ta = document.createElement('textarea');
   ta.value = url; ta.style.cssText = 'position:fixed;top:-999px;opacity:0';
   document.body.appendChild(ta); ta.focus(); ta.select();
-  const ok = document.execCommand('copy');
+  if (document.execCommand('copy')) cb();
+  else prompt('URLをコピーしてシェアしてください:', url);
   document.body.removeChild(ta);
-  if (ok) cb(); else prompt('URLをコピーしてシェアしてください:', url);
 }
 
-// ── イベントタイトル ──────────────────────────────────────────────────
-function onTitleInput(val) {
-  eventTitle = val;
-  ensureRoom();
-  save();
-}
+function onTitleInput(val) { eventTitle=val; ensureRoom(); save(); }
 
 // ── Members ────────────────────────────────────────────────────────────
 function addMember() {
   const inp  = document.getElementById('memberInput');
   const name = inp.value.trim();
-  if (!name || members.find(m => m.name === name)) { inp.focus(); return; }
+  if (!name || members.find(m=>m.name===name)) { inp.focus(); return; }
   members.push({ name, animalIdx: animalIdx++ });
   inp.value = '';
   renderMembers();
   bills.forEach(b => { if (!b.dividers.includes(name)) b.dividers.push(name); refreshBillUI(b.id); });
   updatePayerSelects();
-  ensureRoom();
-  save();
+  ensureRoom(); save();
 }
-
 function removeMember(name) {
-  members = members.filter(m => m.name !== name);
+  members = members.filter(m=>m.name!==name);
   bills.forEach(b => {
-    b.dividers = b.dividers.filter(d => d !== name);
-    if (b.payer === name) b.payer = '';
+    b.dividers = b.dividers.filter(d=>d!==name);
+    if (b.payer===name) b.payer='';
     delete b.overrides[name];
     refreshBillUI(b.id);
   });
-  renderMembers();
-  updatePayerSelects();
-  save();
+  renderMembers(); updatePayerSelects(); save();
 }
-
-function getMember(name)   { return members.find(m => m.name === name); }
-function memberAnimal(name) { const m = getMember(name); return m ? m.animalIdx : 0; }
-
+function getMember(name)    { return members.find(m=>m.name===name); }
+function memberAnimal(name) { const m=getMember(name); return m?m.animalIdx:0; }
 function renderMembers() {
   const c = document.getElementById('memberChips');
   c.innerHTML = '';
@@ -756,7 +884,7 @@ function renderMembers() {
     const chip = document.createElement('div');
     chip.className = 'chip';
     chip.innerHTML =
-      `<span class="chip-animal">${getAnimalSvg(m.animalIdx, 22, 'var(--amber)')}</span>` +
+      `<span class="chip-animal">${getAnimalSvg(m.animalIdx,22,'var(--amber)')}</span>` +
       esc(m.name) +
       ` <button class="chip-del" onclick="removeMember('${ea(m.name)}')">×</button>`;
     c.appendChild(chip);
@@ -765,43 +893,66 @@ function renderMembers() {
 
 // ── Bills ──────────────────────────────────────────────────────────────
 function addBill() {
-  const b = { id: billId++, desc: '', amount: 0, payer: members[0]?.name || '', dividers: members.map(m=>m.name), overrides: {} };
+  const b = {
+    id: billId++, desc:'', amount:0,
+    payer: members[0]?.name||'',
+    dividers: members.map(m=>m.name),
+    overrides: {},
+    currency: 'JPY', rate: 1
+  };
   bills.push(b);
   const wrap = document.createElement('div');
-  wrap.className = 'bill-row'; wrap.id = `bill-${b.id}`;
+  wrap.className='bill-row'; wrap.id=`bill-${b.id}`;
   document.getElementById('billsContainer').appendChild(wrap);
   refreshBillUI(b.id);
   updateGrandTotal();
-  ensureRoom();
-  save();
+  ensureRoom(); save();
 }
-
-function getBill(id) { return bills.find(b => b.id === id); }
+function getBill(id) { return bills.find(b=>b.id===id); }
 
 function refreshBillUI(id) {
   const b   = getBill(id);
   const div = document.getElementById(`bill-${id}`);
   if (!div) return;
-  const idx = bills.indexOf(b) + 1;
+  const idx = bills.indexOf(b)+1;
+  const cur = getCurrency(b.currency);
+  const isJPY = b.currency==='JPY';
 
   const divBtns = members.map(m => {
     const active = b.dividers.includes(m.name);
     return `<button type="button" class="divider-btn${active?' is-active':''}"
       onclick="toggleDivider(${id},'${ea(m.name)}')"
-    ><span class="d-animal">${getAnimalSvg(m.animalIdx, 18, active ? '#fff' : 'var(--muted)')}</span>
-    <span class="chk-icon">${active?'✓':''}</span>
-    ${esc(m.name)}</button>`;
+    ><span class="d-animal">${getAnimalSvg(m.animalIdx,18,active?'#fff':'var(--muted)')}</span>
+    <span class="chk-icon">${active?'✓':''}</span>${esc(m.name)}</button>`;
   }).join('');
+
+  const rateDisplay = isJPY ? '' : `
+    <div class="currency-row" style="margin-top:8px;">
+      <span class="rate-loading" id="rate-loading-${id}">レート取得中...</span>
+      <span class="rate-badge" id="rate-badge-${id}" style="display:none" onclick="openRateEdit(${id})">
+        1 ${cur.code} = <span class="rate-val" id="rate-val-${id}">${b.rate||'--'}</span> 円
+        <span style="font-size:10px">✎</span>
+      </span>
+      <div class="rate-edit-wrap" id="rate-edit-${id}">
+        <span style="font-size:12px;color:var(--muted)">1 ${cur.code} =</span>
+        <input type="number" class="rate-edit-input" id="rate-input-${id}"
+          value="${b.rate||''}"
+          onkeydown="if(event.key==='Enter')confirmRate(${id})"
+          onblur="confirmRate(${id})">
+        <span style="font-size:12px;color:var(--muted)">円</span>
+        <button class="rate-refresh-btn" onclick="refreshRate(${id})">最新に戻す</button>
+      </div>
+    </div>`;
 
   div.innerHTML = `
     <div class="bill-num">会計 ${idx}</div>
     <div class="spacer"></div>
     <div class="bill-row-header">
       <input type="text" placeholder="品目・店名" value="${esc(b.desc)}"
-        oninput="getBill(${id}).desc=this.value; save()" style="width:100%">
+        oninput="getBill(${id}).desc=this.value;save()" style="width:100%">
       <div class="payer-wrap">
         <div class="payer-label">支払った人</div>
-        <select class="payer-select" onchange="getBill(${id}).payer=this.value; save()">
+        <select class="payer-select" onchange="getBill(${id}).payer=this.value;save()">
           <option value="">-- 選択 --</option>
           ${members.map(m=>`<option value="${esc(m.name)}"${b.payer===m.name?' selected':''}>${esc(m.name)}</option>`).join('')}
         </select>
@@ -809,13 +960,23 @@ function refreshBillUI(id) {
       <div class="bill-amount-wrap">
         <div class="bill-amount-label">合計金額</div>
         <div style="display:flex;align-items:center;gap:4px;">
-          <span class="yen-sym">¥</span>
+          <span class="yen-sym">${cur.symbol}</span>
           <input type="number" class="amount-input" min="0" placeholder="0"
-            value="${b.amount||''}" onchange="onAmountChange(${id},this.value)">
+            value="${b.amount||''}" onchange="onAmountChange(${id},this.value)" oninput="updateJpyHint(${id},this.value)">
+        </div>
+        <div class="jpy-hint${!isJPY?' active':''}" id="jpy-hint-${id}">
+          ${!isJPY && b.amount ? '≈ ¥'+toJPY(b.amount,b.currency,b.rate).toLocaleString() : ''}
         </div>
       </div>
     </div>
-    <div class="sub-label">対象メンバー</div>
+    <div class="currency-row">
+      <span class="currency-label">通貨</span>
+      <select class="currency-select" onchange="onCurrencyChange(${id},this.value)">
+        ${CURRENCIES.map(c=>`<option value="${c.code}"${b.currency===c.code?' selected':''}>${c.flag} ${c.code} — ${c.name}</option>`).join('')}
+      </select>
+    </div>
+    ${rateDisplay}
+    <div class="sub-label" style="margin-top:14px">対象メンバー</div>
     <div class="all-check-row">
       <button class="btn btn-outline btn-xs" onclick="setAllDividers(${id},true)">全員</button>
       <button class="btn btn-outline btn-xs" onclick="setAllDividers(${id},false)">クリア</button>
@@ -830,97 +991,219 @@ function refreshBillUI(id) {
     </div>`;
 
   renderSplitTable(id);
+  // 非JPYならレート自動取得
+  if (!isJPY) initRate(id);
 }
 
-function removeBill(id) {
-  bills = bills.filter(b => b.id !== id);
-  document.getElementById(`bill-${id}`)?.remove();
-  bills.forEach((b,i) => {
-    const n = document.querySelector(`#bill-${b.id} .bill-num`);
-    if (n) n.textContent = `会計 ${i+1}`;
-  });
-  updateGrandTotal();
+// ── 通貨変更 ──────────────────────────────────────────────────────────
+async function onCurrencyChange(id, code) {
+  const b = getBill(id);
+  b.currency  = code;
+  b.overrides = {};
+  if (code === 'JPY') { b.rate = 1; }
+  else {
+    b.rate = rateCache[code] || 0;
+  }
+  refreshBillUI(id);
   save();
 }
 
+async function initRate(id) {
+  const b = getBill(id);
+  if (b.currency === 'JPY') return;
+  const loadingEl = document.getElementById(`rate-loading-${id}`);
+  const badgeEl   = document.getElementById(`rate-badge-${id}`);
+  if (loadingEl) loadingEl.style.display = '';
+  if (badgeEl)   badgeEl.style.display   = 'none';
+  const rate = await fetchRate(b.currency);
+  if (rate) {
+    b.rate = rate;
+    rateCache[b.currency] = rate;
+    const valEl = document.getElementById(`rate-val-${id}`);
+    if (valEl)      valEl.textContent   = rate.toFixed(2);
+    if (loadingEl)  loadingEl.style.display = 'none';
+    if (badgeEl)    badgeEl.style.display   = '';
+    const inp = document.getElementById(`rate-input-${id}`);
+    if (inp) inp.value = rate.toFixed(2);
+    updateJpyHint(id, b.amount);
+    renderSplitTable(id);
+    save();
+  } else {
+    // 失敗時: 過去のlocalStorageデータがあれば使用、なければ手動入力を開く
+    const stored = getStoredRate(b.currency);
+    if (stored) {
+      const hrs = Math.round((Date.now() - stored.ts) / 3600000);
+      b.rate = stored.rate;
+      rateCache[b.currency] = stored.rate;
+      const valEl = document.getElementById(`rate-val-${id}`);
+      if (valEl) valEl.textContent = stored.rate.toFixed(2);
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (badgeEl) {
+        badgeEl.style.display = '';
+        badgeEl.title = `取得失敗 — ${hrs}時間前のデータを使用`;
+        badgeEl.style.borderColor = 'var(--amber)';
+      }
+      const inp = document.getElementById(`rate-input-${id}`);
+      if (inp) inp.value = stored.rate.toFixed(2);
+      updateJpyHint(id, b.amount);
+      renderSplitTable(id);
+      save();
+    } else {
+      // 過去データもない → 手動入力モードを即座に開く
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (badgeEl)   badgeEl.style.display   = 'none';
+      const edit = document.getElementById(`rate-edit-${id}`);
+      if (edit) {
+        edit.classList.add('open');
+        const inp = document.getElementById(`rate-input-${id}`);
+        if (inp) {
+          inp.placeholder = 'レートを入力';
+          inp.focus();
+        }
+        // 取得失敗メッセージをeditの前に表示
+        const msg = document.createElement('span');
+        msg.style.cssText = 'font-size:11px;color:var(--red);white-space:nowrap;';
+        msg.textContent = 'レート取得失敗 — 手動で入力してください';
+        msg.id = `rate-err-${id}`;
+        if (!document.getElementById(`rate-err-${id}`)) {
+          edit.parentNode.insertBefore(msg, edit);
+        }
+      }
+    }
+  }
+}
+
+function openRateEdit(id) {
+  document.getElementById(`rate-badge-${id}`)?.classList.remove('visible');
+  document.getElementById(`rate-badge-${id}`).style.display = 'none';
+  const edit = document.getElementById(`rate-edit-${id}`);
+  if (edit) { edit.classList.add('open'); document.getElementById(`rate-input-${id}`)?.focus(); }
+}
+
+function confirmRate(id) {
+  const inp  = document.getElementById(`rate-input-${id}`);
+  if (!inp) return;
+  const val  = parseFloat(inp.value);
+  if (!val || val <= 0) return;
+  const b    = getBill(id);
+  b.rate     = val;
+  const valEl = document.getElementById(`rate-val-${id}`);
+  if (valEl) valEl.textContent = val.toFixed(2);
+  document.getElementById(`rate-edit-${id}`)?.classList.remove('open');
+  document.getElementById(`rate-badge-${id}`).style.display = '';
+  updateJpyHint(id, b.amount);
+  renderSplitTable(id);
+  save();
+}
+
+async function refreshRate(id) {
+  const b = getBill(id);
+  delete rateCache[b.currency];
+  rateFetchedAt = null;
+  document.getElementById(`rate-edit-${id}`)?.classList.remove('open');
+  document.getElementById(`rate-badge-${id}`).style.display = 'none';
+  const loadingEl = document.getElementById(`rate-loading-${id}`);
+  if (loadingEl) { loadingEl.style.display=''; loadingEl.textContent='レート取得中...'; }
+  await initRate(id);
+}
+
+function updateJpyHint(id, rawVal) {
+  const b    = getBill(id);
+  const hint = document.getElementById(`jpy-hint-${id}`);
+  if (!hint || b.currency==='JPY') return;
+  const amt  = parseFloat(rawVal)||0;
+  hint.textContent = amt ? `≈ ¥${toJPY(amt,b.currency,b.rate).toLocaleString()}` : '';
+}
+
+// ── Grand total（JPY換算で合計） ─────────────────────────────────────
 function updateGrandTotal() {
-  const total = bills.reduce((s,b)=>s+b.amount,0);
-  document.getElementById('grandTotalBadge').textContent = `合計: ¥${total.toLocaleString()}`;
+  const total = bills.reduce((s,b) => s + toJPY(b.amount, b.currency, b.rate), 0);
+  document.getElementById('grandTotalBadge').textContent = `合計: ¥${Math.round(total).toLocaleString()}`;
+}
+
+function removeBill(id) {
+  bills = bills.filter(b=>b.id!==id);
+  document.getElementById(`bill-${id}`)?.remove();
+  bills.forEach((b,i) => {
+    const n = document.querySelector(`#bill-${b.id} .bill-num`);
+    if (n) n.textContent=`会計 ${i+1}`;
+  });
+  updateGrandTotal(); save();
 }
 
 function onAmountChange(id, val) {
-  const b = getBill(id);
-  b.amount = parseFloat(val) || 0;
-  b.overrides = {};
+  const b    = getBill(id);
+  b.amount   = parseFloat(val)||0;
+  b.overrides= {};
   renderSplitTable(id);
   updateGrandTotal();
+  updateJpyHint(id, val);
   save();
 }
 
 function toggleDivider(id, name) {
   const b = getBill(id);
   const wasActive = b.dividers.includes(name);
-  if (wasActive) { b.dividers = b.dividers.filter(d => d !== name); delete b.overrides[name]; }
+  if (wasActive) { b.dividers=b.dividers.filter(d=>d!==name); delete b.overrides[name]; }
   else           { b.dividers.push(name); }
   const grid = document.getElementById(`dividers-${id}`);
   if (grid) {
     grid.querySelectorAll('.divider-btn').forEach((btn,i) => {
-      if (i >= members.length) return;
-      const m = members[i];
-      if (m.name !== name) return;
-      const nowActive = !wasActive;
-      btn.classList.toggle('is-active', nowActive);
-      btn.querySelector('.chk-icon').textContent = nowActive ? '✓' : '';
-      const a = btn.querySelector('.d-animal');
-      if (a) a.innerHTML = getAnimalSvg(m.animalIdx, 18, nowActive ? '#fff' : 'var(--muted)');
+      if (i>=members.length) return;
+      const m=members[i];
+      if (m.name!==name) return;
+      const nowActive=!wasActive;
+      btn.classList.toggle('is-active',nowActive);
+      btn.querySelector('.chk-icon').textContent=nowActive?'✓':'';
+      const a=btn.querySelector('.d-animal');
+      if (a) a.innerHTML=getAnimalSvg(m.animalIdx,18,nowActive?'#fff':'var(--muted)');
     });
   }
-  renderSplitTable(id);
-  save();
+  renderSplitTable(id); save();
 }
 
-function setAllDividers(id, val) {
-  const b = getBill(id);
-  b.dividers  = val ? members.map(m=>m.name) : [];
-  b.overrides = {};
-  refreshBillUI(id);
-  save();
+function setAllDividers(id,val) {
+  const b=getBill(id);
+  b.dividers=val?members.map(m=>m.name):[];
+  b.overrides={};
+  refreshBillUI(id); save();
 }
 
 function updatePayerSelects() {
   bills.forEach(b => {
-    const sel = document.getElementById(`bill-${b.id}`)?.querySelector('.payer-select');
+    const sel=document.getElementById(`bill-${b.id}`)?.querySelector('.payer-select');
     if (!sel) return;
-    sel.innerHTML = `<option value="">-- 選択 --</option>` +
+    sel.innerHTML=`<option value="">-- 選択 --</option>`+
       members.map(m=>`<option value="${esc(m.name)}"${b.payer===m.name?' selected':''}>${esc(m.name)}</option>`).join('');
   });
 }
 
 // ── Split table ────────────────────────────────────────────────────────
 function computeSplits(b) {
-  const { dividers, overrides, amount } = b;
-  if (!dividers.length || !amount) return {};
-  const fixed    = dividers.filter(d => overrides[d] !== undefined);
-  const free     = dividers.filter(d => overrides[d] === undefined);
-  const fixedSum = fixed.reduce((s,d) => s + overrides[d], 0);
-  const perFree  = free.length ? Math.round((amount - fixedSum) / free.length) : 0;
-  const result   = {};
-  dividers.forEach(d => { result[d] = overrides[d] !== undefined ? overrides[d] : perFree; });
+  const {dividers,overrides,amount}=b;
+  if (!dividers.length||!amount) return {};
+  const fixed=dividers.filter(d=>overrides[d]!==undefined);
+  const free =dividers.filter(d=>overrides[d]===undefined);
+  const fixedSum=fixed.reduce((s,d)=>s+overrides[d],0);
+  const perFree=free.length?Math.round((amount-fixedSum)/free.length):0;
+  const result={};
+  dividers.forEach(d=>{result[d]=overrides[d]!==undefined?overrides[d]:perFree;});
   return result;
 }
 
 function renderSplitTable(id) {
-  const b    = getBill(id);
-  const cont = document.getElementById(`split-table-${id}`);
+  const b=getBill(id);
+  const cont=document.getElementById(`split-table-${id}`);
   if (!cont) return;
   if (!b.dividers.length) {
-    cont.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0;">対象メンバーを選択してください</div>';
+    cont.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px 0;">対象メンバーを選択してください</div>';
     return;
   }
-  const splits   = computeSplits(b);
-  const splitSum = Object.values(splits).reduce((s,v)=>s+v,0);
-  const diff     = Math.abs(splitSum - b.amount);
-  cont.innerHTML = `
+  const cur=getCurrency(b.currency);
+  const splits=computeSplits(b);
+  const splitSum=Object.values(splits).reduce((s,v)=>s+v,0);
+  const diff=Math.abs(splitSum-b.amount);
+  cont.innerHTML=`
     <table class="split-table">
       <thead><tr>
         <th style="width:38%">メンバー</th>
@@ -928,89 +1211,103 @@ function renderSplitTable(id) {
         <th style="width:30px"></th>
       </tr></thead>
       <tbody>
-        ${b.dividers.map((d,i) => {
-          const isOvr = b.overrides[d] !== undefined;
-          const ai    = memberAnimal(d);
+        ${b.dividers.map((d,i)=>{
+          const isOvr=b.overrides[d]!==undefined;
+          const ai=memberAnimal(d);
+          const jpyStr=b.currency!=='JPY'?`<div class="jpy-hint active">≈ ¥${toJPY(splits[d]||0,b.currency,b.rate).toLocaleString()}</div>`:'';
           return `<tr>
             <td><div class="member-cell">
-              <span class="tbl-animal">${getAnimalSvg(ai,18,'var(--muted)')}</span>
-              ${esc(d)}
+              <span class="tbl-animal">${getAnimalSvg(ai,18,'var(--muted)')}</span>${esc(d)}
             </div></td>
-            <td><div class="split-amount-cell">
-              <span class="yen-sym">¥</span>
-              <input type="number" class="split-input${isOvr?' modified':''}"
-                value="${splits[d]??0}"
-                onfocus="this.select()"
-                onkeydown="if(event.key==='Enter')this.blur()"
-                onchange="onSplitChange(${id},'${ea(d)}',this)">
-            </div></td>
+            <td>
+              <div class="split-amount-cell">
+                <span class="yen-sym">${cur.symbol}</span>
+                <input type="number" class="split-input${isOvr?' modified':''}"
+                  value="${splits[d]??0}"
+                  onfocus="this.select()"
+                  onkeydown="if(event.key==='Enter')this.blur()"
+                  onchange="onSplitChange(${id},'${ea(d)}',this)">
+              </div>
+              ${jpyStr}
+            </td>
             <td><button class="reset-btn${isOvr?' visible':''}" title="均等に戻す" onclick="resetOverride(${id},'${ea(d)}')">↺</button></td>
           </tr>`;
         }).join('')}
         <tr id="split-total-${id}" style="background:var(--amber-pale)">
           <td style="font-weight:700;font-size:12px;color:var(--muted)">合計</td>
           <td style="text-align:right;font-weight:700" colspan="2">
-            ¥${splitSum.toLocaleString()}
-            ${diff>1?`<span style="color:var(--red);font-size:11px;margin-left:4px;">（差額 ¥${Math.round(diff)}）</span>`:''}
+            ${cur.symbol}${splitSum.toLocaleString()}
+            ${b.currency!=='JPY'?`<div class="jpy-hint active">≈ ¥${toJPY(splitSum,b.currency,b.rate).toLocaleString()}</div>`:''}
+            ${diff>1?`<div style="color:var(--red);font-size:11px;">（差額 ${cur.symbol}${Math.round(diff)}）</div>`:''}
           </td>
         </tr>
       </tbody>
     </table>`;
 }
 
-function onSplitChange(id, name, inputEl) {
-  const b   = getBill(id);
-  const val = parseFloat(inputEl.value) || 0;
-  b.overrides[name] = val;
+function onSplitChange(id,name,inputEl) {
+  const b=getBill(id);
+  b.overrides[name]=parseFloat(inputEl.value)||0;
   inputEl.classList.add('modified');
-  const resetBtn = inputEl.closest('tr')?.querySelector('.reset-btn');
-  if (resetBtn) resetBtn.classList.add('visible');
-  const splits = computeSplits(b);
-  const cont   = document.getElementById(`split-table-${id}`);
+  const rb=inputEl.closest('tr')?.querySelector('.reset-btn');
+  if (rb) rb.classList.add('visible');
+  const splits=computeSplits(b);
+  const cont=document.getElementById(`split-table-${id}`);
   if (!cont) return;
-  cont.querySelectorAll('tbody .split-input').forEach((inp, i) => {
-    const member = b.dividers[i];
-    if (!member || member === name) return;
-    if (b.overrides[member] !== undefined) return;
-    inp.value = splits[member] ?? 0;
+  cont.querySelectorAll('tbody .split-input').forEach((inp,i)=>{
+    const member=b.dividers[i];
+    if (!member||member===name||b.overrides[member]!==undefined) return;
+    inp.value=splits[member]??0;
   });
-  const splitSum = Object.values(splits).reduce((s,v)=>s+v,0);
-  const diff     = Math.abs(splitSum - b.amount);
-  const totalRow = document.getElementById(`split-total-${id}`);
-  if (totalRow) {
-    totalRow.cells[1].innerHTML = `¥${splitSum.toLocaleString()}` +
-      (diff>1?`<span style="color:var(--red);font-size:11px;margin-left:4px;">（差額 ¥${Math.round(diff)}）</span>`:'');
-  }
+  const splitSum=Object.values(splits).reduce((s,v)=>s+v,0);
+  const diff=Math.abs(splitSum-b.amount);
+  const cur=getCurrency(b.currency);
+  const tr=document.getElementById(`split-total-${id}`);
+  if (tr) tr.cells[1].innerHTML=`${cur.symbol}${splitSum.toLocaleString()}`+
+    (b.currency!=='JPY'?`<div class="jpy-hint active">≈ ¥${toJPY(splitSum,b.currency,b.rate).toLocaleString()}</div>`:'')+
+    (diff>1?`<div style="color:var(--red);font-size:11px;">（差額 ${cur.symbol}${Math.round(diff)}）</div>`:'');
   save();
 }
 
-function resetOverride(id, name) {
-  delete getBill(id).overrides[name];
-  renderSplitTable(id);
-  save();
-}
+function resetOverride(id,name) { delete getBill(id).overrides[name]; renderSplitTable(id); save(); }
 
 // ── Calculate ──────────────────────────────────────────────────────────
 function calculate() {
-  const paid = {}, owed = {};
-  members.forEach(m => { paid[m.name] = 0; owed[m.name] = 0; });
-  bills.forEach(b => {
-    if (!b.amount) return;
-    if (b.payer && members.find(m=>m.name===b.payer)) paid[b.payer] += b.amount;
-    const splits = computeSplits(b);
-    Object.entries(splits).forEach(([n,v]) => { if (members.find(m=>m.name===n)) owed[n] += v; });
+  // 会計ごとに通貨が異なるため、精算は会計単位でbalanceを管理
+  // まず全会計をJPYに換算した total balance を計算
+  const paidJPY={}, owedJPY={};
+  members.forEach(m=>{ paidJPY[m.name]=0; owedJPY[m.name]=0; });
+
+  // 会計ごとの balance も保持（精算内訳用）
+  const billBalances = bills.map(b=>{
+    const paid={}, owed={};
+    members.forEach(m=>{ paid[m.name]=0; owed[m.name]=0; });
+    if (b.amount && b.payer && members.find(m=>m.name===b.payer)) {
+      paid[b.payer]+=b.amount;
+      paidJPY[b.payer]+=toJPY(b.amount,b.currency,b.rate);
+    }
+    const splits=computeSplits(b);
+    Object.entries(splits).forEach(([n,v])=>{
+      if (members.find(m=>m.name===n)) {
+        owed[n]+=v;
+        owedJPY[n]+=toJPY(v,b.currency,b.rate);
+      }
+    });
+    return {bill:b, paid, owed};
   });
-  const balance = {};
-  members.forEach(m => { balance[m.name] = (paid[m.name]||0) - (owed[m.name]||0); });
-  renderSummary(paid, owed, balance);
-  renderTransfers(minimizeTransfers(balance));
-  const sec = document.getElementById('summarySection');
-  sec.style.display = '';
-  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const balanceJPY={};
+  members.forEach(m=>{ balanceJPY[m.name]=(paidJPY[m.name]||0)-(owedJPY[m.name]||0); });
+
+  renderSummary(paidJPY, owedJPY, balanceJPY);
+  renderTransfers(minimizeTransfers(balanceJPY), billBalances);
+  const sec=document.getElementById('summarySection');
+  sec.style.display='';
+  sec.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 function minimizeTransfers(balance) {
-  const cred=[], debt=[];
+  const cred=[],debt=[];
   Object.entries(balance).forEach(([n,v])=>{
     if (v> 0.5) cred.push({name:n,amt:v});
     if (v<-0.5) debt.push({name:n,amt:-v});
@@ -1018,19 +1315,19 @@ function minimizeTransfers(balance) {
   cred.sort((a,b)=>b.amt-a.amt); debt.sort((a,b)=>b.amt-a.amt);
   const transfers=[];
   let ci=0,di=0;
-  while(ci<cred.length && di<debt.length){
+  while(ci<cred.length&&di<debt.length){
     const c=cred[ci],d=debt[di],amt=Math.min(c.amt,d.amt);
-    transfers.push({from:d.name,to:c.name,amount:Math.round(amt)});
+    transfers.push({from:d.name,to:c.name,amtJPY:Math.round(amt)});
     c.amt-=amt; d.amt-=amt;
     if(c.amt<0.5)ci++; if(d.amt<0.5)di++;
   }
   return transfers;
 }
 
-function renderSummary(paid, owed, balance) {
-  const grid = document.getElementById('summaryGrid');
+function renderSummary(paid,owed,balance) {
+  const grid=document.getElementById('summaryGrid');
   grid.innerHTML='';
-  members.forEach(m => {
+  members.forEach(m=>{
     const net=Math.round(balance[m.name]);
     const cls=net>0?'net-positive':net<0?'net-negative':'net-zero';
     const lbl=net>0?'受け取り':net<0?'支払い':'精算不要';
@@ -1041,15 +1338,15 @@ function renderSummary(paid, owed, balance) {
         <span style="width:22px;height:22px;display:inline-flex;">${getAnimalSvg(m.animalIdx,22,'var(--amber)')}</span>
         ${esc(m.name)}
       </div>
-      <div class="summary-row"><span class="lbl">立替払い</span><span class="val">¥${Math.round(paid[m.name]||0).toLocaleString()}</span></div>
-      <div class="summary-row"><span class="lbl">割り勘負担</span><span class="val">¥${Math.round(owed[m.name]||0).toLocaleString()}</span></div>
+      <div class="summary-row"><span class="lbl">立替払い（円換算）</span><span class="val">¥${Math.round(paid[m.name]||0).toLocaleString()}</span></div>
+      <div class="summary-row"><span class="lbl">割り勘負担（円換算）</span><span class="val">¥${Math.round(owed[m.name]||0).toLocaleString()}</span></div>
       <div class="net-amount ${cls}"><span>${lbl}</span><span>¥${Math.abs(net).toLocaleString()}</span></div>`;
     grid.appendChild(card);
   });
 }
 
-function renderTransfers(transfers) {
-  lastTransfers = transfers;
+function renderTransfers(transfers, billBalances) {
+  lastTransfers=transfers;
   const list=document.getElementById('transferList');
   const wrap=document.getElementById('shareResultWrap');
   if(!transfers.length){
@@ -1058,68 +1355,69 @@ function renderTransfers(transfers) {
     return;
   }
   list.innerHTML='';
+
+  // 通貨ごとの内訳を表示
   transfers.forEach((t,i)=>{
     const item=document.createElement('div');
     item.className='transfer-item'; item.style.animationDelay=`${i*0.06}s`;
-    const fa=memberAnimal(t.from), ta=memberAnimal(t.to);
+    const fa=memberAnimal(t.from),ta=memberAnimal(t.to);
+
+    // 外貨内訳（通貨ごとにまとめる）
+    const currencyLines=[];
+    billBalances.forEach(bb=>{
+      const b=bb.bill;
+      if (b.currency==='JPY') return;
+      const fromOwes=(bb.owed[t.from]||0)-(bb.paid[t.from]||0);
+      const toOwes  =(bb.owed[t.to]  ||0)-(bb.paid[t.to]  ||0);
+      if (fromOwes>0.5&&toOwes<-0.5) {
+        const amt=Math.min(fromOwes,Math.abs(toOwes));
+        currencyLines.push(`${fmtCurrency(Math.round(amt*10)/10,b.currency)}`);
+      }
+    });
+    const extraCur=currencyLines.length?`<div style="font-size:11px;color:var(--muted);margin-top:2px;">${currencyLines.join(' + ')}</div>`:'';
+
     item.innerHTML=`
       <span class="transfer-from"><span class="t-animal">${getAnimalSvg(fa,16,'#fff')}</span>${esc(t.from)}</span>
       <span class="transfer-arrow">→</span>
       <span class="transfer-to"><span class="t-animal">${getAnimalSvg(ta,16,'#fff')}</span>${esc(t.to)}</span>
-      <span class="transfer-amount">¥${t.amount.toLocaleString()}</span>`;
+      <div style="margin-left:auto;text-align:right;">
+        <div class="transfer-amount">¥${t.amtJPY.toLocaleString()}</div>
+        ${extraCur}
+      </div>`;
     list.appendChild(item);
   });
   if(wrap) wrap.style.display='';
 }
 
-// ── Share result text ──────────────────────────────────────────────────
+// ── Share ──────────────────────────────────────────────────────────────
 function buildShareText() {
-  const total    = bills.reduce((s,b)=>s+b.amount,0);
-  const titleStr = eventTitle ? '「' + eventTitle + '」' : '';
-  const lines = ['🍺割り勘精算 ' + titleStr];
-  lines.push(' 合計: ¥' + total.toLocaleString());
-  lines.push('');
-  if(lastTransfers.length === 0){
-    lines.push('✅ 全員精算済み！');
-  } else {
-    lastTransfers.forEach(t => {
-      lines.push(`${t.from} → ${t.to} ¥${t.amount.toLocaleString()}`);
-    });
-  }
+  const total=bills.reduce((s,b)=>s+toJPY(b.amount,b.currency,b.rate),0);
+  const titleStr=eventTitle?'「'+eventTitle+'」':'';
+  const lines=['🍺割り勘精算 '+titleStr,' 合計: ¥'+Math.round(total).toLocaleString(),''];
+  if(!lastTransfers.length){ lines.push('✅ 全員精算済み！'); }
+  else { lastTransfers.forEach(t=>lines.push(`${t.from} → ${t.to} ¥${t.amtJPY.toLocaleString()}`)); }
   lines.push('── powered by BILL SPLITTER ──');
   return lines.join('\n');
 }
-
 function shareResult() {
-  const text = buildShareText();
-  if (navigator.share) {
-    navigator.share({ title: '割り勘精算', text, url: location.href }).catch(() => {});
-    return;
-  }
-  function showCopied() {
-    const el = document.getElementById('resultCopied');
-    el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), 2500);
-  }
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(showCopied).catch(() => resultFallback(text, showCopied));
-  } else {
-    resultFallback(text, showCopied);
-  }
+  const text=buildShareText();
+  if (navigator.share) { navigator.share({title:'割り勘精算',text,url:location.href}).catch(()=>{}); return; }
+  function showCopied(){const el=document.getElementById('resultCopied');el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2500);}
+  if (navigator.clipboard&&navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(showCopied).catch(()=>resultFallback(text,showCopied)); }
+  else resultFallback(text,showCopied);
 }
-
-function resultFallback(text, cb) {
-  const ta = document.createElement('textarea');
-  ta.value = text; ta.style.cssText = 'position:fixed;top:-999px;opacity:0';
+function resultFallback(text,cb){
+  const ta=document.createElement('textarea');
+  ta.value=text; ta.style.cssText='position:fixed;top:-999px;opacity:0';
   document.body.appendChild(ta); ta.focus(); ta.select();
-  if (document.execCommand('copy')) cb();
-  else prompt('精算結果をコピーしてシェアしてください:', text);
+  if(document.execCommand('copy'))cb();
+  else prompt('精算結果をコピーしてシェアしてください:',text);
   document.body.removeChild(ta);
 }
 
 // ── Utils ──────────────────────────────────────────────────────────────
-function esc(s)  { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function ea(s)   { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function ea(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 </script>
 </body>
 </html>
