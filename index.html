@@ -8,8 +8,14 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="割り勘">
 <meta name="theme-color" content="#004067">
-<link rel="apple-touch-icon" id="apple-touch-icon" href="">
-<link rel="manifest" href="manifest.json">
+<!-- iOS -->
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<!-- Favicon -->
+<link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="shortcut icon" href="favicon.ico">
+<!-- Android / PWA -->
+<link rel="manifest" href="site.webmanifest">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1738,46 +1744,5 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 function ea(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 </script>
 
-<script>
-// ── PWA: apple-touch-icon をCanvasで自動生成 ──────────────────────
-(function generateIcon() {
-  const size = 180;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d');
-
-  // 背景（角丸はiOSが自動で付ける）
-  ctx.fillStyle = '#004067';
-  ctx.fillRect(0, 0, size, size);
-
-  // ビールジョッキ SVG を Image経由で描画
-  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 180 180">
-    <!-- ジョッキ本体 -->
-    <rect x="28" y="58" width="96" height="100" rx="10" fill="none" stroke="#FF8709" stroke-width="10"/>
-    <!-- ハンドル -->
-    <path d="M124 78 Q162 78 162 108 Q162 138 124 138" fill="none" stroke="#FF8709" stroke-width="10" stroke-linecap="round"/>
-    <!-- 泡 -->
-    <path d="M28 58 Q42 30 56 58 Q70 30 84 58 Q98 30 112 58 Q126 30 138 58 Q150 30 158 58" fill="none" stroke="#FF8709" stroke-width="9" stroke-linecap="round"/>
-    <!-- 液面ライン -->
-    <line x1="42" y1="110" x2="110" y2="110" stroke="#FF870950" stroke-width="7" stroke-linecap="round"/>
-  </svg>`;
-
-  const blob = new Blob([svgStr], {type: 'image/svg+xml'});
-  const url  = URL.createObjectURL(blob);
-  const img  = new Image();
-  img.onload = () => {
-    ctx.drawImage(img, 0, 0, size, size);
-    URL.revokeObjectURL(url);
-    const dataUrl = canvas.toDataURL('image/png');
-    // apple-touch-icon に設定
-    document.getElementById('apple-touch-icon').href = dataUrl;
-    // faviconにも
-    const favicon = document.createElement('link');
-    favicon.rel = 'icon'; favicon.type = 'image/png'; favicon.href = dataUrl;
-    document.head.appendChild(favicon);
-  };
-  img.src = url;
-})();
-</script>
 </body>
 </html>
