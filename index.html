@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>割り勘計算</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="割り勘">
+<meta name="theme-color" content="#004067">
+<link rel="apple-touch-icon" id="apple-touch-icon" href="">
+<link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -307,6 +313,75 @@
   .transfer-jpy { font-size: 11px; color: var(--muted); text-align: right; margin-top: 1px; }
   .rate-loading { font-size: 11px; color: var(--muted); font-style: italic; }
 
+
+  /* ── PayPay button ───────────────────────────────── */
+  .paypay-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #ff0033; color: #fff;
+    border: none; border-radius: 8px;
+    padding: 6px 12px; font-size: 12px; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    letter-spacing: 0.04em;
+    transition: background 0.15s;
+    text-decoration: none;
+  }
+  .paypay-btn:hover { background: #cc0029; }
+  .paypay-btn svg { flex-shrink: 0; }
+
+  /* ── Weighted split ─────────────────────────────── */
+  .mode-toggle {
+    display: flex; gap: 6px; margin-bottom: 14px;
+  }
+  .mode-btn {
+    flex: 1; padding: 8px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    border: 1.5px solid var(--line); background: var(--paper); color: var(--muted);
+    cursor: pointer; font-family: 'Zen Kaku Gothic New', sans-serif;
+    transition: all 0.12s;
+  }
+  .mode-btn.active {
+    background: #004067; border-color: #004067; color: #fff;
+  }
+  .weight-table { display: flex; flex-direction: column; gap: 10px; }
+  .weight-row {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .weight-name {
+    display: flex; align-items: center; gap: 6px;
+    flex: 1; min-width: 0; font-size: 13px; font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .weight-controls {
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  .weight-btn {
+    width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--line);
+    background: var(--paper); font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); line-height: 1; padding: 0;
+    transition: all 0.12s;
+  }
+  .weight-btn.plus { border-color: var(--amber); background: var(--amber-pale); color: var(--amber); }
+  .weight-btn:active { transform: scale(0.9); }
+  .weight-val {
+    width: 36px; text-align: center; font-size: 15px; font-weight: 700;
+    color: var(--ink);
+  }
+  .weight-amt {
+    width: 68px; text-align: right; font-size: 12px; color: var(--muted);
+    flex-shrink: 0;
+  }
+  .weight-footer {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .weight-footer-info { font-size: 11px; color: var(--muted); }
+  .weight-reset-btn {
+    font-size: 11px; color: var(--muted); background: none;
+    border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer;
+  }
+  .weight-reset-btn:hover { border-color: var(--amber); color: var(--amber); }
+
 </style>
 </head>
 <body>
@@ -429,7 +504,8 @@ async function saveToFirebase() {
     bills:     bills.map(b => ({
       id:  b.id, desc: b.desc, amt: b.amount,
       pay: b.payer, div: b.dividers, ovr: b.overrides,
-      cur: b.currency, rate: b.rate
+      cur: b.currency, rate: b.rate,
+      mode: b.mode||'equal', wts: b.weights||{}
     })),
     billId, animalIdx, ts: Date.now()
   };
@@ -452,7 +528,8 @@ function subscribeRoom(roomId) {
     bills      = (data.bills||[]).map(b => ({
       id: b.id, desc: b.desc||'', amount: b.amt||0,
       payer: b.pay||'', dividers: b.div||[], overrides: b.ovr||({}),
-      currency: b.cur||'JPY', rate: b.rate||1
+      currency: b.cur||'JPY', rate: b.rate||1,
+      mode: b.mode||'equal', weights: b.wts||{}
     }));
     const titleInp = document.getElementById('eventTitleInput');
     if (titleInp) titleInp.value = eventTitle;
@@ -898,7 +975,9 @@ function addBill() {
     payer: members[0]?.name||'',
     dividers: members.map(m=>m.name),
     overrides: {},
-    currency: 'JPY', rate: 1
+    currency: 'JPY', rate: 1,
+    mode: 'equal',   // 'equal' | 'weighted'
+    weights: {},     // { name: 1.0, ... }
   };
   bills.push(b);
   const wrap = document.createElement('div');
@@ -983,14 +1062,22 @@ function refreshBillUI(id) {
     </div>
     <div class="dividers-grid" id="dividers-${id}">${divBtns}</div>
     <hr class="section-hr">
-    <div class="sub-label">割り振り金額（手動修正可）</div>
-    <div id="split-table-${id}"></div>
-    <div class="recalc-note">※ 金額を変更してEnterまたはタブキーで確定 → 差額が自動再配分されます</div>
+    <div class="sub-label" style="margin-bottom:10px;">割り振り</div>
+    <div class="mode-toggle">
+      <button class="mode-btn ${b.mode!=='weighted'?'active':''}" id="mode-equal-${id}" onclick="setMode(${id},'equal')">均等割り</button>
+      <button class="mode-btn ${b.mode==='weighted'?'active':''}" id="mode-weighted-${id}" onclick="setMode(${id},'weighted')">傾斜割り</button>
+    </div>
+    <div id="equal-section-${id}" style="${b.mode==='weighted'?'display:none':''}">
+      <div id="split-table-${id}"></div>
+      <div class="recalc-note">※ 金額を変更してEnterまたはタブキーで確定 → 差額が自動再配分されます</div>
+    </div>
+    <div id="weighted-section-${id}" style="${b.mode!=='weighted'?'display:none':''}"></div>
     <div style="margin-top:12px;text-align:right;">
       <button class="btn btn-red" onclick="removeBill(${id})">この会計を削除</button>
     </div>`;
 
   renderSplitTable(id);
+  renderWeightTable(id);
   // 非JPYならレート自動取得
   if (!isJPY) initRate(id);
 }
@@ -1180,8 +1267,32 @@ function updatePayerSelects() {
 
 // ── Split table ────────────────────────────────────────────────────────
 function computeSplits(b) {
-  const {dividers,overrides,amount}=b;
+  const {dividers,overrides,amount,mode,weights}=b;
   if (!dividers.length||!amount) return {};
+
+  if (mode === 'weighted') {
+    // 傾斜割り
+    const totalWeight = dividers.reduce((s,d) => s + (weights[d]||1), 0);
+    const result = {};
+    if (totalWeight <= 0) {
+      dividers.forEach(d => { result[d] = 0; });
+      return result;
+    }
+    // 端数は最初のメンバーに集約
+    let assigned = 0;
+    dividers.forEach((d, i) => {
+      const w = weights[d] || 1;
+      if (i === dividers.length - 1) {
+        result[d] = amount - assigned;
+      } else {
+        result[d] = Math.round(amount * w / totalWeight);
+        assigned += result[d];
+      }
+    });
+    return result;
+  }
+
+  // 均等割り（既存ロジック）
   const fixed=dividers.filter(d=>overrides[d]!==undefined);
   const free =dividers.filter(d=>overrides[d]===undefined);
   const fixedSum=fixed.reduce((s,d)=>s+overrides[d],0);
@@ -1189,6 +1300,115 @@ function computeSplits(b) {
   const result={};
   dividers.forEach(d=>{result[d]=overrides[d]!==undefined?overrides[d]:perFree;});
   return result;
+}
+
+// 倍率変更
+function changeWeight(id, name, delta) {
+  const b = getBill(id);
+  if (!b.weights[name]) b.weights[name] = 1.0;
+  const newVal = Math.round((b.weights[name] + delta) * 10) / 10;
+  b.weights[name] = Math.max(0.5, Math.min(5.0, newVal));
+  renderWeightTable(id);
+  save();
+}
+
+function resetWeights(id) {
+  const b = getBill(id);
+  b.weights = {};
+  renderWeightTable(id);
+  save();
+}
+
+function setMode(id, mode) {
+  const b = getBill(id);
+  b.mode = mode;
+  // モードボタンの切替
+  const eqBtn = document.getElementById(`mode-equal-${id}`);
+  const wtBtn = document.getElementById(`mode-weighted-${id}`);
+  if (eqBtn) eqBtn.classList.toggle('active', mode === 'equal');
+  if (wtBtn) wtBtn.classList.toggle('active', mode === 'weighted');
+  // 割り振りテーブル切替
+  const equalSec  = document.getElementById(`equal-section-${id}`);
+  const weightSec = document.getElementById(`weighted-section-${id}`);
+  if (equalSec)  equalSec.style.display  = mode === 'equal'    ? '' : 'none';
+  if (weightSec) weightSec.style.display = mode === 'weighted' ? '' : 'none';
+  renderWeightTable(id);
+  renderSplitTable(id);
+  save();
+}
+
+function renderWeightTable(id) {
+  const b   = getBill(id);
+  const cont = document.getElementById(`weighted-section-${id}`);
+  if (!cont || b.mode !== 'weighted') return;
+  const cur = getCurrency(b.currency);
+  const totalWeight = b.dividers.reduce((s,d) => s + (b.weights[d]||1), 0);
+  const splits = computeSplits(b);
+
+  cont.innerHTML = '';
+  const tbl = document.createElement('div');
+  tbl.className = 'weight-table';
+
+  b.dividers.forEach(d => {
+    const w   = b.weights[d] || 1.0;
+    const amt = splits[d] || 0;
+    const ai  = memberAnimal(d);
+    const row = document.createElement('div');
+    row.className = 'weight-row';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'weight-name';
+    nameEl.innerHTML = `<span style="display:inline-flex;width:18px;height:18px;">${getAnimalSvg(ai,18,'var(--amber)')}</span>${esc(d)}`;
+
+    const ctrl = document.createElement('div');
+    ctrl.className = 'weight-controls';
+
+    const minusBtn = document.createElement('button');
+    minusBtn.className = 'weight-btn';
+    minusBtn.textContent = '−';
+    minusBtn.dataset.id   = id;
+    minusBtn.dataset.name = d;
+    minusBtn.addEventListener('click', () => { changeWeight(id, d, -0.5); });
+
+    const valEl = document.createElement('div');
+    valEl.className = 'weight-val';
+    valEl.textContent = w.toFixed(1);
+
+    const plusBtn = document.createElement('button');
+    plusBtn.className = 'weight-btn plus';
+    plusBtn.textContent = '＋';
+    plusBtn.dataset.id   = id;
+    plusBtn.dataset.name = d;
+    plusBtn.addEventListener('click', () => { changeWeight(id, d, +0.5); });
+
+    const amtEl = document.createElement('div');
+    amtEl.className = 'weight-amt';
+    amtEl.textContent = cur.symbol + amt.toLocaleString();
+
+    ctrl.appendChild(minusBtn);
+    ctrl.appendChild(valEl);
+    ctrl.appendChild(plusBtn);
+    row.appendChild(nameEl);
+    row.appendChild(ctrl);
+    row.appendChild(amtEl);
+    tbl.appendChild(row);
+  });
+
+  // フッター
+  const footer = document.createElement('div');
+  footer.className = 'weight-footer';
+  const info = document.createElement('div');
+  info.className = 'weight-footer-info';
+  info.textContent = `倍率合計 ${totalWeight.toFixed(1)} → ${cur.symbol}${b.amount.toLocaleString()}`;
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'weight-reset-btn';
+  resetBtn.textContent = '全員1.0に戻す';
+  resetBtn.addEventListener('click', () => resetWeights(id));
+  footer.appendChild(info);
+  footer.appendChild(resetBtn);
+
+  cont.appendChild(tbl);
+  cont.appendChild(footer);
 }
 
 function renderSplitTable(id) {
@@ -1380,9 +1600,17 @@ function renderTransfers(transfers, billBalances) {
       <span class="transfer-from"><span class="t-animal">${getAnimalSvg(fa,16,'#fff')}</span>${esc(t.from)}</span>
       <span class="transfer-arrow">→</span>
       <span class="transfer-to"><span class="t-animal">${getAnimalSvg(ta,16,'#fff')}</span>${esc(t.to)}</span>
-      <div style="margin-left:auto;text-align:right;">
+      <div style="margin-left:auto;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
         <div class="transfer-amount">¥${t.amtJPY.toLocaleString()}</div>
         ${extraCur}
+        <button class="paypay-btn" style="margin-top:2px;"
+          data-amount="${t.amtJPY}" data-to="${esc(t.to)}"
+          onclick="openPayPayWithConfirm(this)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+          PayPayを開く
+        </button>
       </div>`;
     list.appendChild(item);
   });
@@ -1424,9 +1652,132 @@ function resultFallback(text,cb){
   document.body.removeChild(ta);
 }
 
+// ── PayPay open with confirm dialog ───────────────────────────────────
+function openPayPayWithConfirm(btn) {
+  const amount = parseInt(btn.dataset.amount, 10);
+  const toName = btn.dataset.to;
+  // カスタムダイアログ表示
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const dialog = document.createElement('div');
+  dialog.style.cssText = 'background:#fff;border-radius:16px;padding:24px 20px;max-width:320px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.2);';
+
+  // 金額テキスト
+  const lblEl = document.createElement('div');
+  lblEl.style.cssText = 'font-size:13px;color:#7a9ab0;margin-bottom:6px;';
+  lblEl.textContent = '支払い金額';
+
+  const amtEl = document.createElement('div');
+  amtEl.style.cssText = "font-size:36px;font-weight:900;color:#0d2c3e;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:4px;";
+  amtEl.textContent = '¥' + amount.toLocaleString();
+
+  const toEl = document.createElement('div');
+  toEl.style.cssText = 'font-size:13px;color:#7a9ab0;margin-bottom:20px;';
+  toEl.textContent = '→ ' + toName;
+
+  // PayPayボタン
+  const payBtn = document.createElement('a');
+  payBtn.href = 'paypay://';
+  payBtn.style.cssText = "display:block;background:#ff0033;color:#fff;border-radius:10px;padding:13px;font-size:15px;font-weight:700;text-decoration:none;font-family:'Zen Kaku Gothic New',sans-serif;letter-spacing:0.04em;margin-bottom:10px;";
+  payBtn.textContent = 'PayPayを開く';
+  payBtn.addEventListener('click', () => {
+    document.body.removeChild(overlay);
+    window.open('paypay://', '_blank');
+  });
+
+  // キャンセルボタン
+  const cancelBtn = document.createElement('button');
+  cancelBtn.style.cssText = 'background:none;border:1.5px solid #d4e2ec;border-radius:10px;padding:11px;font-size:14px;color:#7a9ab0;cursor:pointer;width:100%;';
+  cancelBtn.textContent = 'キャンセル';
+  cancelBtn.addEventListener('click', () => document.body.removeChild(overlay));
+
+  dialog.appendChild(lblEl);
+  dialog.appendChild(amtEl);
+  dialog.appendChild(toEl);
+  dialog.appendChild(payBtn);
+  dialog.appendChild(cancelBtn);
+  overlay.appendChild(dialog);
+  overlay.addEventListener('click', e => { if (e.target === overlay) document.body.removeChild(overlay); });
+  document.body.appendChild(overlay);
+}
+
+// ── Copy amount ───────────────────────────────────────────────────────
+function copyAmount(amount, btn) {
+  const text = String(amount);
+
+  function showDone() {
+    const orig = btn.innerHTML;
+    btn.textContent = '✓ コピーしました。PayPayが開きます';
+    btn.style.background = '#1a6b3c';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2500);
+  }
+
+  function openPayPay() {
+    setTimeout(() => { location.href = 'paypay://'; }, 300);
+  }
+
+  function doCopy() {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;top:-999px;opacity:0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => { showDone(); openPayPay(); })
+      .catch(() => { doCopy(); showDone(); openPayPay(); });
+  } else {
+    doCopy(); showDone(); openPayPay();
+  }
+}
+
 // ── Utils ──────────────────────────────────────────────────────────────
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function ea(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+</script>
+
+<script>
+// ── PWA: apple-touch-icon をCanvasで自動生成 ──────────────────────
+(function generateIcon() {
+  const size = 180;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  // 背景（角丸はiOSが自動で付ける）
+  ctx.fillStyle = '#004067';
+  ctx.fillRect(0, 0, size, size);
+
+  // ビールジョッキ SVG を Image経由で描画
+  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 180 180">
+    <!-- ジョッキ本体 -->
+    <rect x="28" y="58" width="96" height="100" rx="10" fill="none" stroke="#FF8709" stroke-width="10"/>
+    <!-- ハンドル -->
+    <path d="M124 78 Q162 78 162 108 Q162 138 124 138" fill="none" stroke="#FF8709" stroke-width="10" stroke-linecap="round"/>
+    <!-- 泡 -->
+    <path d="M28 58 Q42 30 56 58 Q70 30 84 58 Q98 30 112 58 Q126 30 138 58 Q150 30 158 58" fill="none" stroke="#FF8709" stroke-width="9" stroke-linecap="round"/>
+    <!-- 液面ライン -->
+    <line x1="42" y1="110" x2="110" y2="110" stroke="#FF870950" stroke-width="7" stroke-linecap="round"/>
+  </svg>`;
+
+  const blob = new Blob([svgStr], {type: 'image/svg+xml'});
+  const url  = URL.createObjectURL(blob);
+  const img  = new Image();
+  img.onload = () => {
+    ctx.drawImage(img, 0, 0, size, size);
+    URL.revokeObjectURL(url);
+    const dataUrl = canvas.toDataURL('image/png');
+    // apple-touch-icon に設定
+    document.getElementById('apple-touch-icon').href = dataUrl;
+    // faviconにも
+    const favicon = document.createElement('link');
+    favicon.rel = 'icon'; favicon.type = 'image/png'; favicon.href = dataUrl;
+    document.head.appendChild(favicon);
+  };
+  img.src = url;
+})();
 </script>
 </body>
 </html>
