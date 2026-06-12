@@ -510,10 +510,40 @@ async function saveToFirebase() {
     })),
     billId, animalIdx, ts: Date.now()
   };
+  lastSaveTs = data.ts;
   await set(ref(db, 'rooms/' + currentRoomId), data);
 }
 
 let isRemoteUpdate = false;
+let lastAppliedTs  = 0;
+let lastSaveTs     = 0;
+
+function applyData(data) {
+  isRemoteUpdate = true;
+  eventTitle = data.title || '';
+  members    = (data.members||[]).map(m => ({ name: m.n, animalIdx: m.a }));
+  billId     = data.billId   || 0;
+  animalIdx  = data.animalIdx || members.length;
+  bills      = (data.bills||[]).map(b => ({
+    id: b.id, desc: b.desc||'', amount: b.amt||0,
+    payer: b.pay||'', dividers: b.div||[], overrides: b.ovr||({}),
+    currency: b.cur||'JPY', rate: b.rate||1,
+    mode: b.mode||'equal', weights: b.wts||{}
+  }));
+  const titleInp = document.getElementById('eventTitleInput');
+  if (titleInp) titleInp.value = eventTitle;
+  renderMembers();
+  document.getElementById('billsContainer').innerHTML = '';
+  bills.forEach(b => {
+    const wrap = document.createElement('div');
+    wrap.className = 'bill-row'; wrap.id = 'bill-' + b.id;
+    document.getElementById('billsContainer').appendChild(wrap);
+    refreshBillUI(b.id);
+  });
+  updateGrandTotal();
+  isRemoteUpdate = false;
+}
+
 function subscribeRoom(roomId) {
   document.getElementById('connectingBanner').style.display = 'flex';
   onValue(ref(db, 'rooms/' + roomId), (snapshot) => {
@@ -521,29 +551,12 @@ function subscribeRoom(roomId) {
     document.getElementById('newEventBanner').style.display   = 'flex';
     const data = snapshot.val();
     if (!data) return;
-    isRemoteUpdate = true;
-    eventTitle = data.title || '';
-    members    = (data.members||[]).map(m => ({ name: m.n, animalIdx: m.a }));
-    billId     = data.billId   || 0;
-    animalIdx  = data.animalIdx || members.length;
-    bills      = (data.bills||[]).map(b => ({
-      id: b.id, desc: b.desc||'', amount: b.amt||0,
-      payer: b.pay||'', dividers: b.div||[], overrides: b.ovr||({}),
-      currency: b.cur||'JPY', rate: b.rate||1,
-      mode: b.mode||'equal', weights: b.wts||{}
-    }));
-    const titleInp = document.getElementById('eventTitleInput');
-    if (titleInp) titleInp.value = eventTitle;
-    renderMembers();
-    document.getElementById('billsContainer').innerHTML = '';
-    bills.forEach(b => {
-      const wrap = document.createElement('div');
-      wrap.className = 'bill-row'; wrap.id = 'bill-' + b.id;
-      document.getElementById('billsContainer').appendChild(wrap);
-      refreshBillUI(b.id);
-    });
-    updateGrandTotal();
-    isRemoteUpdate = false;
+    const ts = data.ts || 0;
+    // 自分が保存したデータ、または既に適用済みのtsはスキップ
+    if (ts && ts === lastSaveTs) return;
+    if (ts && ts === lastAppliedTs) return;
+    lastAppliedTs = ts;
+    applyData(data);
   });
 }
 
@@ -766,7 +779,9 @@ function getAnimalSvg(idx, size=20, color='currentColor') {
 // ── 通貨定義 ──────────────────────────────────────────────────────────
 const CURRENCIES = [
   { code:'JPY', symbol:'¥',  flag:'🇯🇵', name:'日本円' },
-  { code:'USD', symbol:'$',  flag:'🇺🇸', name:'米ドル' },
+  { code:'USD', symbol:'$',   flag:'🇺🇸', name:'米ドル' },
+  { code:'MXN', symbol:'MX$', flag:'🇲🇽', name:'メキシコペソ' },
+  { code:'CAD', symbol:'C$',  flag:'🇨🇦', name:'カナダドル' },
   { code:'EUR', symbol:'€',  flag:'🇪🇺', name:'ユーロ' },
   { code:'GBP', symbol:'£',  flag:'🇬🇧', name:'英ポンド' },
   { code:'KRW', symbol:'₩',  flag:'🇰🇷', name:'韓国ウォン' },
