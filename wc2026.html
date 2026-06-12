@@ -487,7 +487,7 @@
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey:            "AIzaSyDXgZG_yzDAoci40bEqOhh-kEoc7honNCU",
@@ -507,8 +507,8 @@ function getRoomId() {
 }
 
 let saveTimer      = null;
-let isSaving       = false;   // 保存処理中フラグ
-let ignoreTill     = 0;       // この時刻までのFirebase受信を無視
+let isSaving       = false;
+let myLastTs       = 0;    // 自分が保存したts
 let isRemoteUpdate = false;
 
 function scheduleSave() {
@@ -517,10 +517,8 @@ function scheduleSave() {
   saveTimer = setTimeout(() => saveToFirebase(), 800);
 }
 
-async function saveToFirebase() {
-  if (!currentRoomId || isSaving) return;
-  isSaving = true;
-  const data = {
+function buildPayload() {
+  return {
     title:   eventTitle,
     members: members.map(m => ({ n: m.name, a: m.animalIdx })),
     bills:   bills.map(b => ({
@@ -531,46 +529,66 @@ async function saveToFirebase() {
     })),
     billId, animalIdx, ts: Date.now()
   };
-  // 保存完了後2秒間は自分のデータが返ってきても再描画しない
-  ignoreTill = Date.now() + 2000;
-  await set(ref(db, 'rooms/' + currentRoomId), data);
+}
+
+async function saveToFirebase() {
+  if (!currentRoomId || isSaving) return;
+  isSaving = true;
+  const data = buildPayload();
+  myLastTs = data.ts;
+  try { await set(ref(db, 'rooms/' + currentRoomId), data); } catch(e) {}
   isSaving = false;
 }
 
+function applyRemoteData(data) {
+  isRemoteUpdate = true;
+  eventTitle = data.title || '';
+  members    = (data.members||[]).map(m => ({ name: m.n, animalIdx: m.a }));
+  billId     = data.billId   || 0;
+  animalIdx  = data.animalIdx || members.length;
+  bills      = (data.bills||[]).map(b => ({
+    id: b.id, desc: b.desc||'', amount: b.amt||0,
+    payer: b.pay||'', dividers: b.div||[], overrides: b.ovr||({}),
+    currency: b.cur||'USD', rate: b.rate||1,
+    mode: b.mode||'equal', weights: b.wts||{}
+  }));
+  const titleInp = document.getElementById('eventTitleInput');
+  if (titleInp) titleInp.value = eventTitle;
+  renderMembers();
+  document.getElementById('billsContainer').innerHTML = '';
+  bills.forEach(b => {
+    const wrap = document.createElement('div');
+    wrap.className = 'bill-row'; wrap.id = 'bill-' + b.id;
+    document.getElementById('billsContainer').appendChild(wrap);
+    refreshBillUI(b.id);
+  });
+  updateGrandTotal();
+  isRemoteUpdate = false;
+}
+
 function subscribeRoom(roomId) {
+  // 初回は get() で1回だけ取得してUIを構築
   document.getElementById('connectingBanner').style.display = 'flex';
-  onValue(ref(db, 'rooms/' + roomId), (snapshot) => {
+  get(ref(db, 'rooms/' + roomId)).then(snapshot => {
     document.getElementById('connectingBanner').style.display = 'none';
     document.getElementById('newEventBanner').style.display   = 'flex';
     const data = snapshot.val();
-    if (!data) return;
+    if (data) applyRemoteData(data);
 
-    // 自分が保存した直後の返信は無視（点滅・上書き防止）
-    if (Date.now() < ignoreTill) return;
-
-    isRemoteUpdate = true;
-    eventTitle = data.title || '';
-    members    = (data.members||[]).map(m => ({ name: m.n, animalIdx: m.a }));
-    billId     = data.billId   || 0;
-    animalIdx  = data.animalIdx || members.length;
-    bills      = (data.bills||[]).map(b => ({
-      id: b.id, desc: b.desc||'', amount: b.amt||0,
-      payer: b.pay||'', dividers: b.div||[], overrides: b.ovr||({}),
-      currency: b.cur||'USD', rate: b.rate||1,
-      mode: b.mode||'equal', weights: b.wts||{}
-    }));
-    const titleInp = document.getElementById('eventTitleInput');
-    if (titleInp) titleInp.value = eventTitle;
-    renderMembers();
-    document.getElementById('billsContainer').innerHTML = '';
-    bills.forEach(b => {
-      const wrap = document.createElement('div');
-      wrap.className = 'bill-row'; wrap.id = 'bill-' + b.id;
-      document.getElementById('billsContainer').appendChild(wrap);
-      refreshBillUI(b.id);
+    // 以後はonValueで他ユーザーの変更のみ受信
+    // 自分のtsと一致するものはスキップ
+    onValue(ref(db, 'rooms/' + roomId), (snap) => {
+      const d = snap.val();
+      if (!d) return;
+      // 自分が保存したデータはスキップ
+      if (d.ts && d.ts === myLastTs) return;
+      // 保存処理中もスキップ
+      if (isSaving) return;
+      applyRemoteData(d);
     });
-    updateGrandTotal();
-    isRemoteUpdate = false;
+  }).catch(() => {
+    document.getElementById('connectingBanner').style.display = 'none';
+    document.getElementById('newEventBanner').style.display   = 'flex';
   });
 }
 
