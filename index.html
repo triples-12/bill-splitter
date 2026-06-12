@@ -502,8 +502,11 @@ function scheduleSave() {
   saveTimer = setTimeout(() => saveToFirebase(), 600);
 }
 
+let isSaving = false;
+
 async function saveToFirebase() {
   if (!currentRoomId) return;
+  isSaving = true;
   const data = {
     title:     eventTitle,
     members:   members.map(m => ({ n: m.name, a: m.animalIdx })),
@@ -515,9 +518,11 @@ async function saveToFirebase() {
     })),
     billId, animalIdx,
     ts:  Date.now(),
-    sid: SESSION_ID   // セッションIDを付与
+    sid: SESSION_ID
   };
   await set(ref(db, 'rooms/' + currentRoomId), data);
+  // 書き込み完了後、少し待ってからフラグを解除
+  setTimeout(() => { isSaving = false; }, 1000);
 }
 
 function subscribeRoom(roomId) {
@@ -528,6 +533,7 @@ function subscribeRoom(roomId) {
     const data = snapshot.val();
     if (!data) return;
     // 自分が書き込んだデータはスキップ
+    if (isSaving) return;
     if (data.sid && data.sid === SESSION_ID) return;
     isRemoteUpdate = true;
     eventTitle = data.title || '';
