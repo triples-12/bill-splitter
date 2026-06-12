@@ -506,33 +506,36 @@ function getRoomId() {
   return new URLSearchParams(location.search).get('room');
 }
 
-let saveTimer = null;
+let saveTimer      = null;
+let isSaving       = false;   // 保存処理中フラグ
+let ignoreTill     = 0;       // この時刻までのFirebase受信を無視
+let isRemoteUpdate = false;
+
 function scheduleSave() {
   if (!currentRoomId) return;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveToFirebase(), 600);
+  saveTimer = setTimeout(() => saveToFirebase(), 800);
 }
 
 async function saveToFirebase() {
-  if (!currentRoomId) return;
+  if (!currentRoomId || isSaving) return;
+  isSaving = true;
   const data = {
-    title:     eventTitle,
-    members:   members.map(m => ({ n: m.name, a: m.animalIdx })),
-    bills:     bills.map(b => ({
-      id:  b.id, desc: b.desc, amt: b.amount,
+    title:   eventTitle,
+    members: members.map(m => ({ n: m.name, a: m.animalIdx })),
+    bills:   bills.map(b => ({
+      id: b.id, desc: b.desc, amt: b.amount,
       pay: b.payer, div: b.dividers, ovr: b.overrides,
       cur: b.currency, rate: b.rate,
       mode: b.mode||'equal', wts: b.weights||{}
     })),
     billId, animalIdx, ts: Date.now()
   };
-  lastSavedTs = data.ts;
+  // 保存完了後2秒間は自分のデータが返ってきても再描画しない
+  ignoreTill = Date.now() + 2000;
   await set(ref(db, 'rooms/' + currentRoomId), data);
+  isSaving = false;
 }
-
-let isRemoteUpdate = false;
-let lastSavedTs    = 0;   // 自分が最後に保存したts
-let lastRemoteTs   = 0;   // 最後に受信したts
 
 function subscribeRoom(roomId) {
   document.getElementById('connectingBanner').style.display = 'flex';
@@ -542,11 +545,8 @@ function subscribeRoom(roomId) {
     const data = snapshot.val();
     if (!data) return;
 
-    // 自分が保存したデータがそのまま返ってきた場合はスキップ
-    if (data.ts && data.ts === lastSavedTs) return;
-    // 同じtsを2回処理しない
-    if (data.ts && data.ts === lastRemoteTs) return;
-    lastRemoteTs = data.ts || 0;
+    // 自分が保存した直後の返信は無視（点滅・上書き防止）
+    if (Date.now() < ignoreTill) return;
 
     isRemoteUpdate = true;
     eventTitle = data.title || '';
