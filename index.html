@@ -766,7 +766,9 @@ function getAnimalSvg(idx, size=20, color='currentColor') {
 // ── 通貨定義 ──────────────────────────────────────────────────────────
 const CURRENCIES = [
   { code:'JPY', symbol:'¥',  flag:'🇯🇵', name:'日本円' },
-  { code:'USD', symbol:'$',  flag:'🇺🇸', name:'米ドル' },
+  { code:'USD', symbol:'$',   flag:'🇺🇸', name:'米ドル' },
+  { code:'MXN', symbol:'MX$', flag:'🇲🇽', name:'メキシコペソ' },
+  { code:'CAD', symbol:'C$',  flag:'🇨🇦', name:'カナダドル' },
   { code:'EUR', symbol:'€',  flag:'🇪🇺', name:'ユーロ' },
   { code:'GBP', symbol:'£',  flag:'🇬🇧', name:'英ポンド' },
   { code:'KRW', symbol:'₩',  flag:'🇰🇷', name:'韓国ウォン' },
@@ -828,52 +830,46 @@ async function fetchRate(code) {
     return rateCache[code];
   }
 
-  const timeout = ms => new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), ms));
-
-  function cacheAndReturn(rate) {
-    rateCache[code]     = rate;
-    rateFetchedAt[code] = Date.now();
-    saveRateToLS(code, rate);
-    return rate;
-  }
-
-  // API1: open.er-api.com（APIキー不要）
+  // API1: open.er-api.com
   try {
     const res  = await Promise.race([
       fetch(`https://open.er-api.com/v6/latest/${code}`),
-      timeout(5000)
+      new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 5000))
     ]);
     const json = await res.json();
-    if (json.result === 'success' && json.rates?.JPY) return cacheAndReturn(json.rates['JPY']);
+    if (json.result === 'success' && json.rates?.JPY) {
+      const rate = json.rates['JPY'];
+      rateCache[code]      = rate;
+      rateFetchedAt[code]  = Date.now();
+      saveRateToLS(code, rate);
+      return rate;
+    }
   } catch(e) {}
 
-  // API2: frankfurter.dev（欧州中銀データ、無制限）
+  // API2: frankfurter.app (フォールバック)
   try {
-    const lc = code.toLowerCase();
-    const res = await Promise.race([
-      fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${lc}.json`),
-      timeout(5000)
+    const res  = await Promise.race([
+      fetch(`https://api.frankfurter.app/latest?from=${code}&to=JPY`),
+      new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 5000))
     ]);
     const json = await res.json();
-    const rate = json[lc]?.jpy;
-    if (rate) return cacheAndReturn(rate);
+    if (json.rates?.JPY) {
+      const rate = json.rates['JPY'];
+      rateCache[code]      = rate;
+      rateFetchedAt[code]  = Date.now();
+      saveRateToLS(code, rate);
+      return rate;
+    }
   } catch(e) {}
 
-  // API3: frankfurter.dev（フォールバック）
-  try {
-    const res = await Promise.race([
-      fetch(`https://api.frankfurter.dev/v1/latest?from=${code}&to=JPY`),
-      timeout(5000)
-    ]);
-    const json = await res.json();
-    if (json.rates?.JPY) return cacheAndReturn(json.rates['JPY']);
-  } catch(e) {}
-
-  // localStorage の過去データ（24時間以内）
+  // localStorage の過去データを使う
   const stored = getStoredRate(code);
-  if (stored) { rateCache[code] = stored.rate; return stored.rate; }
+  if (stored) {
+    rateCache[code] = stored.rate;
+    return stored.rate;
+  }
 
-  // メモリキャッシュの古いデータ
+  // メモリキャッシュの古いデータも使う
   if (rateCache[code]) return rateCache[code];
 
   return null;
