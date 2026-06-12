@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>割り勘計算</title>
+<title>割り勘計算 ⚽ FIFA WC 2026</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="割り勘">
-<meta name="theme-color" content="#004067">
+<meta name="theme-color" content="#0f2561">
 <!-- iOS -->
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <!-- Favicon -->
@@ -19,16 +19,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ink: #0d2c3e;
-    --paper: #f8fafc;
-    --amber: #FF8709;
-    --amber-light: #ffa040;
-    --amber-pale: #fff3e0;
-    --red: #c0392b;
-    --green: #1a6b3c;
-    --line: #d4e2ec;
-    --muted: #7a9ab0;
-    --card: #ffffff;
+    --navy:       #0f2561;   /* ヘッダー・強調 */
+    --navy-mid:   #183f84;   /* バナー・badge */
+    --navy-light: #e8edf7;   /* 薄ネイビー背景 */
+    --navy-pale:  #f2f5fc;   /* カード背景 */
+    --ink:        #0f2561;   /* テキスト主色 */
+    --paper:      #ffffff;   /* ページ背景 */
+    --amber:      #d50100;   /* アクセント赤（FIFA） */
+    --amber-light:#e63030;
+    --amber-pale: #fdecea;
+    --red:        #d50100;
+    --green:      #1a6b3c;
+    --line:       #d0daf0;   /* ボーダー */
+    --muted:      #6677aa;   /* ミュートテキスト */
+    --card:       #ffffff;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -36,12 +40,11 @@
     background: var(--paper);
     color: var(--ink);
     min-height: 100vh;
-    background-image: repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(0,64,103,0.04) 28px);
   }
 
   /* ── Header ─────────────────────────────────────── */
   header {
-    background: #004067; padding: 14px 16px;
+    background: var(--navy); padding: 12px 16px;
     display: flex; align-items: center; gap: 10px;
     position: sticky; top: 0; z-index: 100;
     border-bottom: 3px solid var(--amber);
@@ -52,23 +55,21 @@
     font-size: 18px; font-weight: 900; color: #fff; letter-spacing: 0.05em;
     white-space: nowrap;
   }
-  header .subtitle { font-size: 10px; color: var(--amber-light); letter-spacing: 0.12em; margin-top: 1px; white-space: nowrap; }
-  .header-text { min-width: 0; }
-  .share-banner {
-    margin: 0 0 0 auto;
-    display: flex; align-items: center; gap: 8px;
-    flex-shrink: 0;
+  header .subtitle {
+    font-size: 10px; color: rgba(255,255,255,0.65); letter-spacing: 0.12em;
+    margin-top: 1px; white-space: nowrap;
   }
+  .header-text { min-width: 0; }
+  .share-banner { margin: 0 0 0 auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .share-btn {
     font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; font-size: 12px;
-    background: var(--amber); color: #fff; border: none; border-radius: 8px;
-    padding: 7px 14px; cursor: pointer; display: flex; align-items: center; gap: 6px;
-    transition: background 0.15s;
-    white-space: nowrap;   /* ★ 折り返し防止 */
-    flex-shrink: 0;
+    background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.6);
+    border-radius: 20px; padding: 6px 14px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
   }
-  .share-btn:hover { background: var(--amber-light); }
-  .share-copied { font-size: 12px; color: var(--amber-light); opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+  .share-btn:hover { background: rgba(255,255,255,0.15); border-color: #fff; }
+  .share-copied { font-size: 12px; color: rgba(255,255,255,0.8); opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
   .share-copied.show { opacity: 1; }
 
   main { max-width: 960px; margin: 0 auto; padding: 24px 16px 80px; }
@@ -88,7 +89,7 @@
   }
   .sec-title::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 
-  .card { background: var(--card); border-radius: 12px; border: 1px solid var(--line); padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  .card { background: var(--card); border-radius: 12px; border: 1px solid var(--line); padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(15,37,97,0.08); }
 
   /* ── Member chips ────────────────────────────────── */
   .member-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; min-height: 20px; }
@@ -107,9 +108,9 @@
   input[type="text"], input[type="number"] {
     font-family: 'Noto Sans JP', sans-serif; font-size: 14px;
     border: 1.5px solid var(--line); border-radius: 8px; padding: 8px 12px;
-    outline: none; background: var(--paper); color: var(--ink); transition: border-color 0.15s;
+    outline: none; background: var(--navy-pale); color: var(--ink); transition: border-color 0.15s;
   }
-  input[type="text"]:focus, input[type="number"]:focus { border-color: var(--amber); background: #fff; }
+  input[type="text"]:focus, input[type="number"]:focus { border-color: var(--navy-mid); background: #fff; }
 
   .btn {
     font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; font-size: 13px;
@@ -118,19 +119,19 @@
   }
   .btn-amber { background: var(--amber); color: #fff; }
   .btn-amber:hover { background: var(--amber-light); transform: translateY(-1px); }
-  .btn-outline { background: transparent; color: var(--amber); border: 1.5px solid var(--amber); }
-  .btn-outline:hover { background: var(--amber-pale); }
+  .btn-outline { background: transparent; color: var(--navy); border: 1.5px solid var(--navy); }
+  .btn-outline:hover { background: var(--navy-light); }
   .btn-red { background: transparent; color: var(--red); border: 1.5px solid #e8c5c0; font-size: 12px; padding: 6px 10px; }
   .btn-red:hover { background: #fdf0ef; }
-  .btn-green { background: var(--green); color: #fff; padding: 11px 24px; font-size: 15px; }
-  .btn-green:hover { background: #1e7d48; transform: translateY(-1px); }
+  .btn-green { background: var(--navy); color: #fff; padding: 11px 24px; font-size: 15px; }
+  .btn-green:hover { background: var(--navy-mid); transform: translateY(-1px); }
   .btn-xs { font-size: 11px !important; padding: 4px 10px !important; border-radius: 6px !important; }
 
   /* ── Bill rows ───────────────────────────────────── */
-  .bill-row { border: 1.5px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 14px; background: #fdfdfc; position: relative; }
+  .bill-row { border: 1.5px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 14px; background: var(--navy-pale); position: relative; }
   .bill-num {
     position: absolute; top: -1px; left: 14px;
-    background: var(--ink); color: var(--amber-light);
+    background: var(--navy); color: #fff;
     font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
     padding: 2px 10px; border-radius: 0 0 6px 6px;
   }
@@ -143,9 +144,9 @@
   .payer-select {
     font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
     border: 1.5px solid var(--line); border-radius: 8px; padding: 7px 10px;
-    background: var(--paper); color: var(--ink); cursor: pointer; outline: none;
+    background: var(--navy-pale); color: var(--ink); cursor: pointer; outline: none;
   }
-  .payer-select:focus { border-color: var(--amber); }
+  .payer-select:focus { border-color: var(--navy-mid); }
   .sub-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; font-weight: 500; }
   .dividers-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
   .all-check-row { display: flex; gap: 8px; margin-bottom: 8px; }
@@ -153,18 +154,18 @@
   .divider-btn {
     font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
     padding: 5px 12px 5px 6px; border-radius: 20px;
-    border: 1.5px solid var(--line); background: var(--paper); color: var(--muted);
+    border: 1.5px solid var(--line); background: var(--navy-pale); color: var(--muted);
     cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s;
     user-select: none; display: inline-flex; align-items: center; gap: 6px;
   }
-  .divider-btn.is-active { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600; }
+  .divider-btn.is-active { background: var(--navy); border-color: var(--navy); color: #fff; font-weight: 600; }
   .divider-btn .chk-icon { font-size: 11px; line-height: 1; min-width: 10px; }
   .divider-btn .d-animal { width: 20px; height: 20px; flex-shrink: 0; }
 
   /* ── Split table ─────────────────────────────────── */
   .split-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
   .split-table th { text-align: left; font-size: 11px; font-weight: 500; color: var(--muted); padding: 4px 8px; letter-spacing: 0.08em; border-bottom: 1px solid var(--line); }
-  .split-table td { padding: 6px 8px; border-bottom: 1px solid #f0ebe0; vertical-align: middle; }
+  .split-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   .split-amount-cell { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
   .yen-sym { color: var(--muted); font-size: 12px; }
   .member-cell { display: flex; align-items: center; gap: 7px; font-weight: 500; }
@@ -173,14 +174,14 @@
   .split-input {
     width: 120px; text-align: right; font-size: 14px; font-weight: 500;
     padding: 6px 10px; border-radius: 6px;
-    border: 1.5px solid var(--line); background: var(--paper); color: var(--ink);
+    border: 1.5px solid var(--line); background: var(--navy-pale); color: var(--ink);
     font-family: 'Noto Sans JP', sans-serif; outline: none;
     -moz-appearance: textfield;
   }
   .split-input::-webkit-outer-spin-button,
   .split-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-  .split-input:focus { border-color: var(--amber); background: #fff; }
-  .split-input.modified { border-color: var(--amber); background: var(--amber-pale); font-weight: 700; }
+  .split-input:focus { border-color: var(--navy-mid); background: #fff; }
+  .split-input.modified { border-color: var(--navy-mid); background: var(--navy-light); font-weight: 700; }
 
   .reset-btn {
     background: none; border: none; cursor: pointer; color: var(--muted);
@@ -194,12 +195,12 @@
   .spacer { margin-top: 6px; }
   .total-badge {
     font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 900; font-size: 13px;
-    background: var(--ink); color: var(--amber-light); padding: 3px 10px; border-radius: 6px; margin-left: 8px;
+    background: var(--navy); color: #fff; padding: 3px 10px; border-radius: 6px; margin-left: 8px;
   }
 
   /* ── Summary ─────────────────────────────────────── */
   .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
-  .member-summary-card { border: 1.5px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--card); }
+  .member-summary-card { border: 1.5px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--navy-pale); }
   .member-name-lbl {
     font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; font-size: 15px;
     margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
@@ -208,7 +209,7 @@
   .summary-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 4px; }
   .summary-row .lbl { color: var(--muted); }
   .summary-row .val { font-weight: 600; }
-  .net-amount { margin-top: 10px; padding-top: 8px; border-top: 2px solid var(--ink); display: flex; justify-content: space-between; font-weight: 700; font-size: 14px; }
+  .net-amount { margin-top: 10px; padding-top: 8px; border-top: 2px solid var(--navy); display: flex; justify-content: space-between; font-weight: 700; font-size: 14px; }
   .net-positive { color: var(--green); }
   .net-negative { color: var(--red); }
   .net-zero { color: var(--muted); }
@@ -217,27 +218,27 @@
   .transfer-list { display: flex; flex-direction: column; gap: 10px; }
   .transfer-item {
     display: flex; align-items: center; gap: 12px;
-    background: var(--card); border: 1.5px solid var(--line); border-radius: 10px;
+    background: var(--navy-pale); border: 1.5px solid var(--line); border-radius: 10px;
     padding: 12px 16px; font-size: 14px; animation: slideIn 0.25s ease both;
   }
   @keyframes slideIn { from { transform: translateX(-8px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  .transfer-from { font-weight: 700; background: var(--red); color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 13px; display: flex; align-items: center; gap: 5px; }
+  .transfer-from { font-weight: 700; background: #d50100; color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 13px; display: flex; align-items: center; gap: 5px; }
   .transfer-arrow { font-size: 18px; color: var(--muted); }
   .transfer-to { font-weight: 700; background: var(--green); color: #fff; padding: 3px 10px; border-radius: 12px; font-size: 13px; display: flex; align-items: center; gap: 5px; }
   .transfer-amount { margin-left: auto; font-weight: 900; font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 17px; }
-  .no-transfer { text-align: center; padding: 24px; color: var(--green); font-weight: 700; font-size: 15px; }
+  .no-transfer { text-align: center; padding: 24px; color: var(--navy-mid); font-weight: 700; font-size: 15px; }
   .t-animal { width: 16px; height: 16px; }
 
   /* ── Share result button ─────────────────────────────── */
   .share-result-btn {
     font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; font-size: 13px;
-    background: var(--header, #004067); color: #fff; border: none; border-radius: 8px;
+    background: var(--navy); color: #fff; border: none; border-radius: 8px;
     padding: 10px 20px; cursor: pointer;
     display: inline-flex; align-items: center; gap: 7px;
     transition: background 0.15s; letter-spacing: 0.04em;
     white-space: nowrap;
   }
-  .share-result-btn:hover { background: #005a8a; }
+  .share-result-btn:hover { background: var(--navy-mid); }
   .result-copied { font-size: 12px; color: var(--amber); opacity: 0; transition: opacity 0.3s; margin-left: 10px; white-space: nowrap; }
   .result-copied.show { opacity: 1; }
 
@@ -260,7 +261,7 @@
     letter-spacing: 0.03em;
     transition: border-color 0.15s;
   }
-  .event-title-input:focus { border-bottom-color: var(--amber); }
+  .event-title-input:focus { border-bottom-color: var(--navy); }
   .event-title-input::placeholder { color: var(--muted); font-weight: 500; font-size: 16px; }
   .event-title-display {
     font-family: 'Zen Kaku Gothic New', sans-serif;
@@ -280,17 +281,17 @@
   .currency-select {
     font-family: 'Noto Sans JP', sans-serif; font-size: 13px;
     border: 1.5px solid var(--line); border-radius: 8px; padding: 6px 10px;
-    background: var(--paper); color: var(--ink); cursor: pointer; outline: none;
+    background: var(--navy-pale); color: var(--ink); cursor: pointer; outline: none;
   }
-  .currency-select:focus { border-color: var(--amber); }
+  .currency-select:focus { border-color: var(--navy-mid); }
   .rate-badge {
     display: inline-flex; align-items: center; gap: 5px;
-    background: var(--paper); border: 1.5px solid var(--line);
+    background: var(--navy-pale); border: 1.5px solid var(--line);
     border-radius: 8px; padding: 5px 10px; cursor: pointer;
     font-size: 12px; color: var(--muted); transition: border-color 0.12s;
     white-space: nowrap;
   }
-  .rate-badge:hover { border-color: var(--amber); color: var(--ink); }
+  .rate-badge:hover { border-color: var(--navy); color: var(--ink); }
   .rate-badge .rate-val { font-weight: 700; color: var(--ink); }
   .rate-edit-wrap {
     display: none; align-items: center; gap: 6px; flex-wrap: wrap;
@@ -299,7 +300,7 @@
   .rate-edit-input {
     width: 90px; text-align: right; font-size: 14px; font-weight: 700;
     padding: 5px 8px; border-radius: 6px;
-    border: 1.5px solid var(--amber); background: var(--amber-pale); color: var(--ink);
+    border: 1.5px solid var(--navy); background: var(--navy-light); color: var(--ink);
     font-family: 'Noto Sans JP', sans-serif; outline: none;
     -moz-appearance: textfield;
   }
@@ -310,12 +311,12 @@
     background: transparent; color: var(--muted); border: 1.5px solid var(--line);
     cursor: pointer; white-space: nowrap;
   }
-  .rate-refresh-btn:hover { border-color: var(--amber); color: var(--amber); }
+  .rate-refresh-btn:hover { border-color: var(--navy); color: var(--navy); }
   .jpy-hint {
     font-size: 11px; color: var(--muted); margin-top: 3px; text-align: right;
     min-height: 14px;
   }
-  .jpy-hint.active { color: var(--amber); font-weight: 500; }
+  .jpy-hint.active { color: var(--navy-mid); font-weight: 500; }
   .transfer-jpy { font-size: 11px; color: var(--muted); text-align: right; margin-top: 1px; }
   .rate-loading { font-size: 11px; color: var(--muted); font-style: italic; }
 
@@ -341,12 +342,12 @@
   }
   .mode-btn {
     flex: 1; padding: 8px; border-radius: 8px; font-size: 13px; font-weight: 600;
-    border: 1.5px solid var(--line); background: var(--paper); color: var(--muted);
+    border: 1.5px solid var(--line); background: var(--navy-pale); color: var(--muted);
     cursor: pointer; font-family: 'Zen Kaku Gothic New', sans-serif;
     transition: all 0.12s;
   }
   .mode-btn.active {
-    background: #004067; border-color: #004067; color: #fff;
+    background: var(--navy); border-color: var(--navy); color: #fff;
   }
   .weight-table { display: flex; flex-direction: column; gap: 10px; }
   .weight-row {
@@ -394,11 +395,11 @@
 
 <header>
   <div class="header-icon">
-    <img src="apple-touch-icon.png" width="36" height="36" style="border-radius:8px;display:block;">
+    <span style="font-size:30px;line-height:1;">⚽</span>
   </div>
   <div>
-    <h1>割り勘計算</h1>
-    <div class="subtitle">BILL SPLITTER</div>
+    <h1>割り勘計算 ⚽</h1>
+    <div class="subtitle">FIFA WORLD CUP 2026</div>
   </div>
   <div class="share-banner">
     <button class="share-btn" id="shareBtn" onclick="shareUrl()">
@@ -529,7 +530,7 @@ function subscribeRoom(roomId) {
     bills      = (data.bills||[]).map(b => ({
       id: b.id, desc: b.desc||'', amount: b.amt||0,
       payer: b.pay||'', dividers: b.div||[], overrides: b.ovr||({}),
-      currency: b.cur||'JPY', rate: b.rate||1,
+      currency: b.cur||'USD', rate: b.rate||1,
       mode: b.mode||'equal', weights: b.wts||{}
     }));
     const titleInp = document.getElementById('eventTitleInput');
@@ -765,18 +766,20 @@ function getAnimalSvg(idx, size=20, color='currentColor') {
 
 // ── 通貨定義 ──────────────────────────────────────────────────────────
 const CURRENCIES = [
-  { code:'JPY', symbol:'¥',  flag:'🇯🇵', name:'日本円' },
-  { code:'USD', symbol:'$',  flag:'🇺🇸', name:'米ドル' },
-  { code:'EUR', symbol:'€',  flag:'🇪🇺', name:'ユーロ' },
-  { code:'GBP', symbol:'£',  flag:'🇬🇧', name:'英ポンド' },
-  { code:'KRW', symbol:'₩',  flag:'🇰🇷', name:'韓国ウォン' },
-  { code:'CNY', symbol:'¥',  flag:'🇨🇳', name:'人民元' },
-  { code:'THB', symbol:'฿',  flag:'🇹🇭', name:'タイバーツ' },
-  { code:'AUD', symbol:'A$', flag:'🇦🇺', name:'豪ドル' },
-  { code:'SGD', symbol:'S$', flag:'🇸🇬', name:'シンガポールドル' },
-  { code:'HKD', symbol:'HK$',flag:'🇭🇰', name:'香港ドル' },
-  { code:'TWD', symbol:'NT$',flag:'🇹🇼', name:'台湾ドル' },
-  { code:'MYR', symbol:'RM', flag:'🇲🇾', name:'マレーシアリンギット' },
+  { code:'USD', symbol:'$',   flag:'🇺🇸', name:'米ドル' },
+  { code:'MXN', symbol:'MX$', flag:'🇲🇽', name:'メキシコペソ' },
+  { code:'CAD', symbol:'C$',  flag:'🇨🇦', name:'カナダドル' },
+  { code:'JPY', symbol:'¥',   flag:'🇯🇵', name:'日本円' },
+  { code:'EUR', symbol:'€',   flag:'🇪🇺', name:'ユーロ' },
+  { code:'GBP', symbol:'£',   flag:'🇬🇧', name:'英ポンド' },
+  { code:'KRW', symbol:'₩',   flag:'🇰🇷', name:'韓国ウォン' },
+  { code:'CNY', symbol:'¥',   flag:'🇨🇳', name:'人民元' },
+  { code:'THB', symbol:'฿',   flag:'🇹🇭', name:'タイバーツ' },
+  { code:'AUD', symbol:'A$',  flag:'🇦🇺', name:'豪ドル' },
+  { code:'SGD', symbol:'S$',  flag:'🇸🇬', name:'シンガポールドル' },
+  { code:'HKD', symbol:'HK$', flag:'🇭🇰', name:'香港ドル' },
+  { code:'TWD', symbol:'NT$', flag:'🇹🇼', name:'台湾ドル' },
+  { code:'MYR', symbol:'RM',  flag:'🇲🇾', name:'マレーシアリンギット' },
 ];
 
 function getCurrency(code) { return CURRENCIES.find(c=>c.code===code) || CURRENCIES[0]; }
@@ -982,7 +985,7 @@ function addBill() {
     payer: members[0]?.name||'',
     dividers: members.map(m=>m.name),
     overrides: {},
-    currency: 'JPY', rate: 1,
+    currency: 'USD', rate: 1,
     mode: 'equal',   // 'equal' | 'weighted'
     weights: {},     // { name: 1.0, ... }
   };
