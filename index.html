@@ -490,7 +490,12 @@ function getRoomId() {
   return new URLSearchParams(location.search).get('room');
 }
 
-let saveTimer = null;
+// このセッション固有のID — 自分の書き込みを識別するために使う
+const SESSION_ID = Math.random().toString(36).slice(2, 10);
+
+let saveTimer      = null;
+let isRemoteUpdate = false;
+
 function scheduleSave() {
   if (!currentRoomId) return;
   clearTimeout(saveTimer);
@@ -508,40 +513,11 @@ async function saveToFirebase() {
       cur: b.currency, rate: b.rate,
       mode: b.mode||'equal', wts: b.weights||{}
     })),
-    billId, animalIdx, ts: Date.now()
+    billId, animalIdx,
+    ts:  Date.now(),
+    sid: SESSION_ID   // セッションIDを付与
   };
-  lastSaveTs = data.ts;
   await set(ref(db, 'rooms/' + currentRoomId), data);
-}
-
-let isRemoteUpdate = false;
-let lastAppliedTs  = 0;
-let lastSaveTs     = 0;
-
-function applyData(data) {
-  isRemoteUpdate = true;
-  eventTitle = data.title || '';
-  members    = (data.members||[]).map(m => ({ name: m.n, animalIdx: m.a }));
-  billId     = data.billId   || 0;
-  animalIdx  = data.animalIdx || members.length;
-  bills      = (data.bills||[]).map(b => ({
-    id: b.id, desc: b.desc||'', amount: b.amt||0,
-    payer: b.pay||'', dividers: b.div||[], overrides: b.ovr||({}),
-    currency: b.cur||'JPY', rate: b.rate||1,
-    mode: b.mode||'equal', weights: b.wts||{}
-  }));
-  const titleInp = document.getElementById('eventTitleInput');
-  if (titleInp) titleInp.value = eventTitle;
-  renderMembers();
-  document.getElementById('billsContainer').innerHTML = '';
-  bills.forEach(b => {
-    const wrap = document.createElement('div');
-    wrap.className = 'bill-row'; wrap.id = 'bill-' + b.id;
-    document.getElementById('billsContainer').appendChild(wrap);
-    refreshBillUI(b.id);
-  });
-  updateGrandTotal();
-  isRemoteUpdate = false;
 }
 
 function subscribeRoom(roomId) {
@@ -551,12 +527,31 @@ function subscribeRoom(roomId) {
     document.getElementById('newEventBanner').style.display   = 'flex';
     const data = snapshot.val();
     if (!data) return;
-    const ts = data.ts || 0;
-    // 自分が保存したデータ、または既に適用済みのtsはスキップ
-    if (ts && ts === lastSaveTs) return;
-    if (ts && ts === lastAppliedTs) return;
-    lastAppliedTs = ts;
-    applyData(data);
+    // 自分が書き込んだデータはスキップ
+    if (data.sid && data.sid === SESSION_ID) return;
+    isRemoteUpdate = true;
+    eventTitle = data.title || '';
+    members    = (data.members||[]).map(m => ({ name: m.n, animalIdx: m.a }));
+    billId     = data.billId   || 0;
+    animalIdx  = data.animalIdx || members.length;
+    bills      = (data.bills||[]).map(b => ({
+      id: b.id, desc: b.desc||'', amount: b.amt||0,
+      payer: b.pay||'', dividers: b.div||[], overrides: b.ovr||({}),
+      currency: b.cur||'JPY', rate: b.rate||1,
+      mode: b.mode||'equal', weights: b.wts||{}
+    }));
+    const titleInp = document.getElementById('eventTitleInput');
+    if (titleInp) titleInp.value = eventTitle;
+    renderMembers();
+    document.getElementById('billsContainer').innerHTML = '';
+    bills.forEach(b => {
+      const wrap = document.createElement('div');
+      wrap.className = 'bill-row'; wrap.id = 'bill-' + b.id;
+      document.getElementById('billsContainer').appendChild(wrap);
+      refreshBillUI(b.id);
+    });
+    updateGrandTotal();
+    isRemoteUpdate = false;
   });
 }
 
