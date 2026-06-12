@@ -389,16 +389,28 @@
   }
   .weight-reset-btn:hover { border-color: var(--amber); color: var(--amber); }
 
+
+  /* ── App description ────────────────────────────── */
+  .app-description {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.7;
+    padding: 10px 14px;
+    background: var(--navy-pale);
+    border-left: 3px solid var(--navy);
+    border-radius: 0 6px 6px 0;
+    margin-bottom: 20px;
+  }
 </style>
 </head>
 <body>
 
 <header>
   <div class="header-icon">
-    <span style="font-size:30px;line-height:1;">⚽</span>
+    <span style="font-size:28px;line-height:1;">⚽</span>
   </div>
   <div>
-    <h1>割り勘計算 ⚽</h1>
+    <h1>割り勘計算</h1>
     <div class="subtitle">FIFA WORLD CUP 2026</div>
   </div>
   <div class="share-banner">
@@ -414,6 +426,9 @@
 </header>
 
 <main>
+  <div class="app-description">
+    参加者を登録し、会計ごとに対象者を選択。通貨レートは概算のため、支払時に固定のレートがあれば手入力。割り勘額を個別に手動修正することも可能で、立場や年齢・ノンアルなどで傾斜をかける場合は「傾斜割」も可能です。
+  </div>
   <div id="connectingBanner" class="readonly-banner" style="display:none;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <span>接続中...</span>
@@ -425,7 +440,7 @@
 
   <div class="event-title-wrap">
     <input type="text" id="eventTitleInput" class="event-title-input"
-      placeholder="イベント名を入力（例: 5/1 BBQ大会）"
+      placeholder="例: 店名 / 6/13 ダラス決起会"
       oninput="onTitleInput(this.value)">
   </div>
 
@@ -904,7 +919,7 @@ let eventTitle    = '';
 let currentRoomId = null;
 let lastTransfers = [];
 
-function save() { if (window.__firebaseSave) window.__firebaseSave(); }
+function save() { if (!isRemoteUpdate && window.__firebaseSave) window.__firebaseSave(); }
 
 async function ensureRoom() {
   if (currentRoomId) return;
@@ -1037,7 +1052,7 @@ function refreshBillUI(id) {
     <div class="bill-num">会計 ${idx}</div>
     <div class="spacer"></div>
     <div class="bill-row-header">
-      <input type="text" placeholder="品目・店名" value="${esc(b.desc)}"
+      <input type="text" placeholder="店名（例: Los Tacos No.1）" value="${esc(b.desc)}"
         oninput="getBill(${id}).desc=this.value;save()" style="width:100%">
       <div class="payer-wrap">
         <div class="payer-label">支払った人</div>
