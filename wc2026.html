@@ -526,10 +526,14 @@ async function saveToFirebase() {
     })),
     billId, animalIdx, ts: Date.now()
   };
+  lastSavedTs = data.ts;
   await set(ref(db, 'rooms/' + currentRoomId), data);
 }
 
 let isRemoteUpdate = false;
+let lastSavedTs    = 0;   // 自分が最後に保存したts
+let lastRemoteTs   = 0;   // 最後に受信したts
+
 function subscribeRoom(roomId) {
   document.getElementById('connectingBanner').style.display = 'flex';
   onValue(ref(db, 'rooms/' + roomId), (snapshot) => {
@@ -537,6 +541,13 @@ function subscribeRoom(roomId) {
     document.getElementById('newEventBanner').style.display   = 'flex';
     const data = snapshot.val();
     if (!data) return;
+
+    // 自分が保存したデータがそのまま返ってきた場合はスキップ
+    if (data.ts && data.ts === lastSavedTs) return;
+    // 同じtsを2回処理しない
+    if (data.ts && data.ts === lastRemoteTs) return;
+    lastRemoteTs = data.ts || 0;
+
     isRemoteUpdate = true;
     eventTitle = data.title || '';
     members    = (data.members||[]).map(m => ({ name: m.n, animalIdx: m.a }));
